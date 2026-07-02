@@ -1,19 +1,38 @@
 import json
+import logging
 import os
 import time
 
 from pacvo.block import Block
+from pacvo.crypto import canonical_json
 from pacvo.params import (
     BLOCK_REWARD,
     GENESIS_TIMESTAMP,
     INITIAL_TARGET,
+    MAX_BLOCK_BYTES,
+    MAX_BLOCK_TXS,
+    MAX_FUTURE_TIMESTAMP,
+    MAX_REORG_DEPTH,
     MAX_TARGET,
+    MIN_FEE,
+    MTP_WINDOW,
     RETARGET_INTERVAL,
     STAKE_LOCK_BLOCKS,
     TARGET_BLOCK_TIME,
     stake_split,
 )
 from pacvo.transaction import Transaction
+
+logger = logging.getLogger("pacvo.chain")
+
+
+def median_time_past(blocks: list[Block]) -> int:
+    window = blocks[-min(MTP_WINDOW, len(blocks)) :]
+    timestamps = sorted(block.timestamp for block in window)
+    mid = len(timestamps) // 2
+    if len(timestamps) % 2 == 1:
+        return timestamps[mid]
+    return (timestamps[mid - 1] + timestamps[mid]) // 2
 
 
 class State:
@@ -88,14 +107,154 @@ class Blockchain:
             return False, "invalid signature"
         if tx.amount <= 0:
             return False, "amount must be positive"
-        if tx.fee < 0:
-            return False, "fee must be non-negative"
+        if tx.fee < MIN_FEE:
+            return False, "fee below minimum"
         if tx.stake_amount != 0:
             return False, "stake_amount must be zero"
         if tx.nonce != state.next_nonce(tx.sender):
             return False, "invalid nonce"
         if state.spendable(tx.sender) < tx.amount + tx.fee:
             return False, "insufficient balance"
+        return True, ""
+
+    def _validate_timestamp(self, timestamp: int, prior_blocks: list[Block]) -> tuple[bool, str]:
+        mtp = median_time_past(prior_blocks)
+        if timestamp <= mtp:
+            return False, "timestamp not greater than median-time-past"
+        now = int(time.time())
+        if timestamp > now + MAX_FUTURE_TIMESTAMP:
+            return False, "timestamp too far in future"
+        return True, ""
+
+    def header_matches_block(self, header: dict, block: Block) -> bool:
+        return (
+            header["height"] == block.height
+            and header["prev_hash"] == block.prev_hash
+            and header["merkle_root"] == block.merkle_root
+            and header["timestamp"] == block.timestamp
+            and int(header["target"], 16) == block.target
+            and header["nonce"] == block.nonce
+        )
+
+    def find_fork_point(self, headers: list[dict]) -> int | None:
+        fork_height: int | None = None
+        for header in headers:
+            height = header["height"]
+            if height >= len(self.blocks):
+                continue
+            local_block = self.blocks[height]
+            if self.header_matches_block(header, local_block):
+                fork_height = height
+            else:
+                break
+        return fork_height
+
+    def validate_header(self, header: dict, prior_blocks: list[Block]) -> tuple[bool, str]:
+        prev = prior_blocks[-1]
+        height = header["height"]
+        if height != prev.height + 1:
+            return False, "invalid height"
+        if header["prev_hash"] != prev.block_hash:
+            return False, "invalid prev_hash"
+
+        temp = Blockchain()
+        temp.blocks = list(prior_blocks)
+        expected_target = temp.next_target()
+        if int(header["target"], 16) != expected_target:
+            return False, "invalid target"
+
+        header_block = Block(
+            height,
+            header["prev_hash"],
+            header["merkle_root"],
+            header["timestamp"],
+            int(header["target"], 16),
+            header["nonce"],
+            [],
+        )
+        if not header_block.meets_target():
+            return False, "insufficient proof of work"
+
+        ok, reason = self._validate_timestamp(header["timestamp"], prior_blocks)
+        if not ok:
+            return False, reason
+        return True, ""
+
+    def validate_header_chain(self, headers: list[dict], fork_height: int) -> tuple[bool, str]:
+        new_headers = [h for h in headers if h["height"] > fork_height]
+        if not new_headers:
+            return False, "no new headers"
+
+        prior_blocks = list(self.blocks[: fork_height + 1])
+        for header in new_headers:
+            if header["height"] != prior_blocks[-1].height + 1:
+                return False, "non-consecutive heights"
+            ok, reason = self.validate_header(header, prior_blocks)
+            if not ok:
+                return False, reason
+            prior_blocks.append(
+                Block(
+                    header["height"],
+                    header["prev_hash"],
+                    header["merkle_root"],
+                    header["timestamp"],
+                    int(header["target"], 16),
+                    header["nonce"],
+                    [],
+                )
+            )
+        return True, ""
+
+    def cumulative_work_for_headers(self, headers: list[dict], fork_height: int) -> int:
+        local_work = sum(block.work for block in self.blocks[: fork_height + 1])
+        peer_work = 0
+        for header in headers:
+            if header["height"] <= fork_height:
+                continue
+            target = int(header["target"], 16)
+            peer_work += (2**512) // (target + 1)
+        return local_work + peer_work
+
+    def _rebuild_state(self, upto_height: int) -> State:
+        state = State()
+        for block in self.blocks[: upto_height + 1]:
+            if block.height == 0:
+                continue
+            self._release_matured_stakes(state, block.height)
+            for tx in block.transactions[1:]:
+                self._apply_non_coinbase_tx(state, tx)
+            if block.transactions and block.transactions[0].is_coinbase:
+                self._apply_coinbase(state, block.transactions[0], block.height)
+        return state
+
+    def execute_reorg(self, fork_height: int, new_blocks: list[Block]) -> tuple[bool, str]:
+        if self.height - fork_height > MAX_REORG_DEPTH:
+            logger.warning(
+                "rejecting reorg: depth %s exceeds MAX_REORG_DEPTH %s",
+                self.height - fork_height,
+                MAX_REORG_DEPTH,
+            )
+            return False, "reorg depth exceeds maximum"
+
+        working_blocks = list(self.blocks[: fork_height + 1])
+        working_state = self._rebuild_state(fork_height)
+
+        temp = Blockchain()
+        temp.blocks = working_blocks
+        temp.state = working_state
+
+        for block in new_blocks:
+            ok, reason = temp.validate_block(block)
+            if not ok:
+                return False, reason
+
+        if temp.cumulative_work() <= self.cumulative_work():
+            return False, "insufficient work"
+
+        self.blocks = temp.blocks
+        self.state = temp.state.copy()
+        if self.data_file:
+            self.save()
         return True, ""
 
     def validate_block(self, block: Block) -> tuple[bool, str]:
@@ -107,12 +266,16 @@ class Blockchain:
             return False, "invalid target"
         if not block.meets_target():
             return False, "insufficient proof of work"
-        tip = self.blocks[-1]
-        now = int(time.time())
-        if block.timestamp < tip.timestamp:
-            return False, "timestamp too early"
-        if block.timestamp > now + 7200:
-            return False, "timestamp too far in future"
+
+        ok, reason = self._validate_timestamp(block.timestamp, self.blocks)
+        if not ok:
+            return False, reason
+
+        if len(block.transactions) > MAX_BLOCK_TXS:
+            return False, "too many transactions"
+        if len(canonical_json(block.to_dict())) > MAX_BLOCK_BYTES:
+            return False, "block too large"
+
         txids = [tx.txid for tx in block.transactions]
         if block.merkle_root != Block.compute_merkle_root(txids):
             return False, "invalid merkle root"
@@ -189,26 +352,6 @@ class Blockchain:
 
     def cumulative_work(self) -> int:
         return sum(block.work for block in self.blocks)
-
-    def replace_if_better(self, block_dicts: list[dict]) -> bool:
-        candidate = Blockchain()
-        genesis = Block.from_dict(block_dicts[0])
-        if genesis.block_hash != self.blocks[0].block_hash:
-            return False
-        candidate.blocks = [genesis]
-        candidate.state = State()
-        for block_dict in block_dicts[1:]:
-            block = Block.from_dict(block_dict)
-            ok, _ = candidate.add_block(block)
-            if not ok:
-                return False
-        if candidate.cumulative_work() <= self.cumulative_work():
-            return False
-        self.blocks = candidate.blocks
-        self.state = candidate.state.copy()
-        if self.data_file:
-            self.save()
-        return True
 
     def save(self) -> None:
         if not self.data_file:

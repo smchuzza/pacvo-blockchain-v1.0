@@ -7,6 +7,20 @@ MAX_TARGET = 2**512 - 1
 INITIAL_TARGET = 2**486  # ~53k hashes/s → ~20 min expected block time at launch
 GENESIS_TIMESTAMP = 1751452800
 
+MAX_REORG_DEPTH = 128
+MAX_BLOCK_TXS = 100
+MAX_BLOCK_BYTES = 4 * 1024 * 1024
+MIN_FEE = 10000
+MAX_MEMPOOL_TXS = 1000
+MAX_FRAME = 8 * 1024 * 1024
+MAX_PEERS = 32
+MAX_CONNS_PER_IP = 3
+MAX_BLOCK_BATCH = 64
+HANDSHAKE_TIMEOUT = 20.0
+MAX_MSG_RATE = 50
+MTP_WINDOW = 11
+MAX_FUTURE_TIMESTAMP = 600
+
 
 def stake_split(total_reward: int) -> tuple[int, int]:
     stake = total_reward // 10

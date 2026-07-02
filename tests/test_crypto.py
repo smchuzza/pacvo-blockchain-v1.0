@@ -19,7 +19,7 @@ from pacvo.crypto import (
 )
 from pacvo.params import BLOCK_REWARD, stake_split
 from pacvo.transaction import Transaction
-from pacvo.wallet import Wallet
+from pacvo.wallet import Wallet, WalletError
 
 SHA512_EMPTY = (
     "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
@@ -45,15 +45,24 @@ plaintext = b"encrypted payload data"
 blob = encrypt_payload(aes_key, plaintext)
 assert decrypt_payload(aes_key, blob) == plaintext
 
+address = derive_address(public_key)
+assert address.startswith("pvo1")
+assert len(address) == 4 + 128
+
 wallet = Wallet.generate()
 address = wallet.address
 with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
     wallet_path = f.name
 try:
-    wallet.save(wallet_path)
-    loaded = Wallet.load(wallet_path)
+    wallet.save(wallet_path, "test-passphrase")
+    loaded = Wallet.load(wallet_path, "test-passphrase")
     assert loaded.address == address
     assert loaded.sign_public_key == wallet.sign_public_key
+    try:
+        Wallet.load(wallet_path, "wrong-passphrase")
+        raise AssertionError("expected WalletError for wrong passphrase")
+    except WalletError:
+        pass
 finally:
     os.unlink(wallet_path)
 
@@ -62,7 +71,7 @@ tx = Transaction(
     sender_public_key=wallet.sign_public_key,
     recipient=recipient,
     amount=1000,
-    fee=10,
+    fee=10_000,
     nonce=1,
     timestamp=1751452800,
 )

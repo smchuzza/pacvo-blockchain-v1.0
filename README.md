@@ -1,17 +1,19 @@
 # Pacvo (PVO)
 
-Pacvo is an educational post-quantum cryptocurrency full node written in Python. It implements a proof-of-work blockchain with account-based transfers, automatic staking of mining rewards, and an encrypted peer-to-peer network. The design goal is to demonstrate how modern post-quantum primitives can be composed into a working ledger—not to serve as production financial infrastructure.
+Pacvo is an educational post-quantum cryptocurrency full node written in Python. It implements a proof-of-work blockchain with account-based transfers, automatic staking of mining rewards, and an authenticated encrypted peer-to-peer network. The design goal is to demonstrate how modern post-quantum primitives can be composed into a working ledger—not to serve as production financial infrastructure.
 
 ## Cryptography stack
 
 | Layer | Algorithm | Role |
 |-------|-----------|------|
-| Signatures | SPHINCS+-SHA2-128f (`pqcrypto.sign.sphincs_sha2_128f_simple`) | Transaction authorization |
-| P2P key exchange | ML-KEM-768 (`pqcrypto.kem.ml_kem_768`) | Session key establishment |
-| P2P transport | AES-256-GCM | Encrypted message payloads |
+| Signatures | SPHINCS+-SHA2-256s (`pqcrypto.sign.sphincs_sha2_256s_simple`) | Transaction authorization (~30 KB signatures) |
+| P2P identity | SPHINCS+-SHA2-256s | Per-node long-lived handshake authentication |
+| P2P key exchange | ML-KEM-768 (`pqcrypto.kem.ml_kem_768`) | Ephemeral per-connection KEM |
+| P2P transport | AES-256-GCM | Directional session keys bound to handshake transcript |
+| Wallet encryption | bcrypt KDF + AES-256-GCM | Passphrase-protected secret keys |
 | Hashing / PoW | SHA-512 | Block IDs, Merkle tree, hashcash mining |
 
-Addresses use the `pvo1` prefix followed by the first 20 bytes of `SHA-512(sign_public_key)` as hex (40 characters).
+Addresses use the `pvo1` prefix followed by the full 64-byte `SHA-512(sign_public_key)` digest as hex (128 hex characters).
 
 ## Consensus parameters
 
@@ -19,13 +21,30 @@ Addresses use the `pvo1` prefix followed by the first 20 bytes of `SHA-512(sign_
 |-----------|-------|
 | Block reward | 3 PVO |
 | Coin unit | 1 PVO = 10^8 base units |
+| Minimum fee | 0.0001 PVO (10,000 base units) |
 | Staking | 10% of each block reward auto-staked |
 | Stake lock | 128 blocks (~1.8 days at target block time) |
 | Target block time | 20 minutes (1200 seconds) |
 | Difficulty retarget | Every 32 blocks, clamped to 4x adjustment |
 | Initial difficulty | `2^486` at launch (~20 min blocks on a typical CPU) |
+| Max reorg depth | 128 blocks |
+| Timestamps | Strictly greater than median-time-past (11 blocks); at most 600 s ahead of local clock |
 
 Each mined block pays the miner 2.7 PVO spendable immediately and locks 0.3 PVO as stake until `unlock_height = block_height + 128`.
+
+## Resource limits
+
+| Limit | Value |
+|-------|-------|
+| Max transactions per block | 100 |
+| Max block size (canonical JSON) | 4 MiB |
+| Max mempool transactions | 1,000 (evict lowest fee when full) |
+| Max P2P frame size | 8 MiB |
+| Max peers | 32 total connections |
+| Max inbound per IP | 3 |
+| Handshake timeout | 20 seconds |
+| Inbound message rate | 50 messages/second per connection |
+| Header sync batch | up to 64 blocks per `get_blocks` request |
 
 ## Installation
 
@@ -42,7 +61,10 @@ pip install -r requirements.txt
 ```bash
 .venv/bin/python tests/test_crypto.py
 .venv/bin/python tests/test_chain.py
+.venv/bin/python tests/test_network.py
 ```
+
+SPHINCS+-256s signing is slow (on the order of seconds per signature); network tests use only a handful of handshakes.
 
 ## Two-node demo
 
@@ -54,7 +76,10 @@ This walkthrough starts a mining node and a syncing peer on localhost, mines blo
 mkdir -p /tmp/pacvo-demo/data-a /tmp/pacvo-demo/data-b
 
 .venv/bin/python cli.py wallet create --out /tmp/pacvo-demo/wa.json
+# Enter and confirm a passphrase when prompted
+
 .venv/bin/python cli.py wallet show --wallet /tmp/pacvo-demo/wa.json
+# Enter passphrase
 
 .venv/bin/python cli.py wallet create --out /tmp/pacvo-demo/wb.json
 .venv/bin/python cli.py wallet show --wallet /tmp/pacvo-demo/wb.json
@@ -62,7 +87,15 @@ mkdir -p /tmp/pacvo-demo/data-a /tmp/pacvo-demo/data-b
 
 Save the printed addresses as `ADDR_A` and `ADDR_B`.
 
+Non-interactive passphrase (less secure; useful for scripts):
+
+```bash
+export PACVO_WALLET_PASSPHRASE='your-passphrase'
+```
+
 ### 2. Start node A (miner) and node B (peer)
+
+Each node stores a plaintext `identity.json` in its data directory. This key authenticates the node on the P2P network; it does not hold funds.
 
 In separate terminals:
 
@@ -83,21 +116,12 @@ In separate terminals:
   --peers 127.0.0.1:9333
 ```
 
-Wait for the miner to find the first block (on the order of 20 minutes), then for subsequent blocks to propagate.
+Wait for the miner to find the first block (on the order of 20 minutes), then for subsequent blocks to propagate via headers-first sync.
 
 ### 3. Confirm sync on node B
 
 ```bash
 .venv/bin/python cli.py chain --node 127.0.0.1:9334 --last 5
-```
-
-Example output (after mining has progressed):
-
-```
-Chain height: 3
-  height=1 hash=000... txs=1 ts=...
-  height=2 hash=000... txs=1 ts=...
-  height=3 hash=000... txs=1 ts=...
 ```
 
 ### 4. Check miner balance on node A
@@ -106,21 +130,7 @@ Chain height: 3
 .venv/bin/python cli.py balance --address ADDR_A --node 127.0.0.1:9333
 ```
 
-Example output (after several blocks):
-
-```
-Address: pvo1...
-Spendable: 8.10000000 PVO
-Staked: 0.90000000 PVO
-Next nonce: 0
-Height: 3
-  Stake entry: 0.30000000 PVO (unlock height 129)
-  ...
-```
-
 ### 5. Send PVO from wallet A to wallet B
-
-Submit the transaction through node B (it gossips to the miner):
 
 ```bash
 .venv/bin/python cli.py send \
@@ -130,29 +140,12 @@ Submit the transaction through node B (it gossips to the miner):
   --node 127.0.0.1:9334
 ```
 
-Example output:
-
-```
-85ecfbad29f75627ff639820755a2daa1c848d6e52053d188ba4f3aedb7cd60558aa9ea432560fbc9dc82e4e907bb867cece2b943163a3bec04f1e3c89ae5a48
-{'error': '', 'ok': True}
-```
-
-Wait for the miner to include the transaction in a new block (another ~20 minutes per block at launch difficulty).
+You will be prompted for the wallet passphrase (or `PACVO_WALLET_PASSPHRASE`).
 
 ### 6. Confirm recipient balance on node B
 
 ```bash
 .venv/bin/python cli.py balance --address ADDR_B --node 127.0.0.1:9334
-```
-
-Example output:
-
-```
-Address: pvo1af991eb1259abcd16c878b3d0f2c9b2caff1a041
-Spendable: 2.50000000 PVO
-Staked: 0.00000000 PVO
-Next nonce: 0
-Height: 4
 ```
 
 Stop both node processes with Ctrl+C when finished.
@@ -161,19 +154,33 @@ Stop both node processes with Ctrl+C when finished.
 
 ```
 pacvo/
-  params.py       # Chain constants and stake_split()
+  params.py       # Chain constants and resource limits
   crypto.py       # PQ primitives, AES-GCM, addressing
-  wallet.py       # Key generation and persistence
+  wallet.py       # bcrypt-encrypted key persistence
   transaction.py  # Signed transfers and coinbase
   block.py        # Block header, Merkle root, PoW check
-  chain.py        # State, validation, persistence, reorg
-  network.py      # ML-KEM + AES-GCM P2P and rpc_call()
-  node.py         # Mempool, handlers, gossip
+  chain.py        # State, validation, headers-first reorg
+  network.py      # Authenticated ML-KEM P2P and rpc_call()
+  node.py         # Mempool, sync, identity, TOFU pinning
   miner.py        # Candidate builder and mining loop
 cli.py            # Command-line interface
 tests/            # Unit tests (no live mining)
 ```
 
+## Security (v2)
+
+**Authenticated P2P handshake.** Outbound connections use a challenge–response protocol: the dialer sends a random 32-byte challenge; the listener responds with a fresh ML-KEM public key, its SPHINCS+ identity public key, and a signature over `pacvo-hs-listener || kem_pub || challenge`. The dialer verifies, encapsulates, and responds with ciphertext, its identity key, and a signature over `pacvo-hs-dialer || ct || kem_pub || challenge`. Shared secrets derive directional AES-256-GCM keys from the KEM output and a transcript hash over all handshake material.
+
+**TOFU pinning.** Outbound peers are recorded in `known_peers.json` as `host:port → sha512(identity_pub)[:16]`. A changed identity on reconnect aborts with an error log. Inbound connections and one-shot `rpc_call` clients use ephemeral identities (no pinning).
+
+**Encrypted wallets.** Wallet secret keys are encrypted with AES-256-GCM after key derivation via `bcrypt.kdf` (100 rounds, 16-byte salt from `os.urandom`, which is seeded from hardware timing jitter and other kernel entropy sources on Linux). Wrong passphrases raise a clear error.
+
+**Headers-first sync.** Peers exchange header chains via `get_headers` / `headers`, validate proof-of-work and retarget rules without bodies, then fetch block bodies in batches via `get_blocks` / `blocks`. Reorgs deeper than 128 blocks are rejected.
+
+**Full-width addresses.** The entire 512-bit SHA-512 digest of the signing public key is used, eliminating truncation collision surface.
+
+**Median-time-past.** Block timestamps must be strictly greater than the median of the previous 11 block timestamps and no more than 600 seconds in the future.
+
 ## Security disclaimer
 
-Pacvo is an educational prototype. It has not been audited, does not implement production-grade network hardening, and must not be used to secure real funds. Post-quantum algorithms used here are correct library bindings, but the surrounding consensus, networking, and wallet tooling are simplified for learning purposes.
+Pacvo is an educational prototype. It has not been audited and must not be used to secure real funds. Post-quantum algorithm bindings come from maintained libraries, but the surrounding consensus, networking, and wallet tooling are simplified for learning purposes.

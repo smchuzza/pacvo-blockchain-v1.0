@@ -4,7 +4,7 @@ import os
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from pqcrypto.kem import ml_kem_768
-from pqcrypto.sign import sphincs_sha2_128f_simple
+from pqcrypto.sign import sphincs_sha2_256s_simple
 
 _NONCE_SIZE = 12
 
@@ -22,16 +22,16 @@ def canonical_json(obj) -> bytes:
 
 
 def generate_sign_keypair() -> tuple[bytes, bytes]:
-    return sphincs_sha2_128f_simple.generate_keypair()
+    return sphincs_sha2_256s_simple.generate_keypair()
 
 
 def sign_message(secret_key: bytes, message: bytes) -> bytes:
-    return sphincs_sha2_128f_simple.sign(secret_key, message)
+    return sphincs_sha2_256s_simple.sign(secret_key, message)
 
 
 def verify_signature(public_key: bytes, message: bytes, signature: bytes) -> bool:
     try:
-        return sphincs_sha2_128f_simple.verify(public_key, message, signature)
+        return sphincs_sha2_256s_simple.verify(public_key, message, signature)
     except Exception:
         return False
 
@@ -49,7 +49,11 @@ def kem_decapsulate(secret_key: bytes, ciphertext: bytes) -> bytes:
 
 
 def derive_address(sign_public_key: bytes) -> str:
-    return "pvo1" + sha512(sign_public_key)[:20].hex()
+    return "pvo1" + sha512(sign_public_key).hex()
+
+
+def identity_fingerprint(public_key: bytes) -> str:
+    return sha512(public_key)[:16].hex()
 
 
 def encrypt_payload(key: bytes, plaintext: bytes) -> bytes:

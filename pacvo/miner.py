@@ -3,7 +3,9 @@ import logging
 import time
 
 from pacvo.block import Block
-from pacvo.params import BLOCK_REWARD, stake_split
+from pacvo.chain import median_time_past
+from pacvo.crypto import canonical_json
+from pacvo.params import BLOCK_REWARD, MAX_BLOCK_BYTES, MAX_BLOCK_TXS, stake_split
 from pacvo.transaction import Transaction
 
 logger = logging.getLogger("pacvo.miner")
@@ -18,6 +20,8 @@ def build_candidate(chain, mempool_txs: list, miner_address: str) -> Block:
     selected = []
     fees = 0
     for tx in sorted_txs:
+        if len(selected) >= MAX_BLOCK_TXS - 1:
+            break
         ok, _ = chain.validate_transaction(tx, state)
         if not ok:
             continue
@@ -28,16 +32,32 @@ def build_candidate(chain, mempool_txs: list, miner_address: str) -> Block:
     txs = [
         Transaction.coinbase(miner_address, spendable + fees, stake, chain.height + 1)
     ] + selected
+    while len(txs) > MAX_BLOCK_TXS:
+        txs.pop()
     tip = chain.blocks[-1]
-    return Block(
+    mtp = median_time_past(chain.blocks)
+    timestamp = max(mtp + 1, int(time.time()))
+    candidate = Block(
         chain.height + 1,
         tip.block_hash,
         Block.compute_merkle_root([t.txid for t in txs]),
-        max(int(time.time()), tip.timestamp),
+        timestamp,
         chain.next_target(),
         0,
         txs,
     )
+    while len(canonical_json(candidate.to_dict())) > MAX_BLOCK_BYTES and len(txs) > 1:
+        txs.pop()
+        candidate = Block(
+            candidate.height,
+            candidate.prev_hash,
+            Block.compute_merkle_root([t.txid for t in txs]),
+            candidate.timestamp,
+            candidate.target,
+            candidate.nonce,
+            txs,
+        )
+    return candidate
 
 
 def _search_nonces(candidate: Block, start_nonce: int, count: int) -> int | None:

@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 import argparse
 import asyncio
+import getpass
 import logging
+import os
 import time
 
+from pacvo.block import Block
+from pacvo.crypto import sha512_hex
 from pacvo.network import rpc_call
 from pacvo.params import COIN
 from pacvo.transaction import Transaction
-from pacvo.wallet import Wallet
+from pacvo.wallet import Wallet, WalletError
 
 
 def format_pvo(amount: int) -> str:
@@ -25,14 +29,40 @@ def parse_peers(value: str) -> list[tuple[str, int]]:
     return [parse_host_port(part.strip()) for part in value.split(",") if part.strip()]
 
 
+def get_passphrase(prompt: str = "Wallet passphrase: ") -> str:
+    env = os.environ.get("PACVO_WALLET_PASSPHRASE")
+    if env is not None:
+        return env
+    return getpass.getpass(prompt)
+
+
+def load_wallet(path: str) -> Wallet:
+    passphrase = get_passphrase()
+    try:
+        return Wallet.load(path, passphrase)
+    except WalletError as exc:
+        raise SystemExit(str(exc)) from exc
+
+
 def cmd_wallet_create(args: argparse.Namespace) -> None:
+    env = os.environ.get("PACVO_WALLET_PASSPHRASE")
+    if env is not None:
+        passphrase = env
+        confirm = env
+    else:
+        passphrase = getpass.getpass("Enter passphrase: ")
+        confirm = getpass.getpass("Confirm passphrase: ")
+    if not passphrase:
+        raise SystemExit("passphrase must not be empty")
+    if passphrase != confirm:
+        raise SystemExit("passphrases do not match")
     wallet = Wallet.generate()
-    wallet.save(args.out)
+    wallet.save(args.out, passphrase)
     print(wallet.address)
 
 
 def cmd_wallet_show(args: argparse.Namespace) -> None:
-    wallet = Wallet.load(args.wallet)
+    wallet = load_wallet(args.wallet)
     print(wallet.address)
 
 
@@ -43,14 +73,14 @@ def cmd_run(args: argparse.Namespace) -> None:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-    wallet = Wallet.load(args.wallet)
+    wallet = load_wallet(args.wallet)
     peers = parse_peers(args.peers)
     node = Node(wallet, args.data, args.host, args.port, peers, args.mine)
     asyncio.run(node.start())
 
 
 async def _send(args: argparse.Namespace) -> None:
-    wallet = Wallet.load(args.wallet)
+    wallet = load_wallet(args.wallet)
     host, port = parse_host_port(args.node)
     response = await rpc_call(host, port, "get_balance", {"address": wallet.address})
     balance = response["data"]
@@ -92,28 +122,41 @@ def cmd_balance(args: argparse.Namespace) -> None:
     asyncio.run(_balance(args))
 
 
+def _header_hash(header: dict) -> str:
+    from pacvo.crypto import canonical_json
+
+    return sha512_hex(canonical_json(header))
+
+
 async def _chain(args: argparse.Namespace) -> None:
     host, port = parse_host_port(args.node)
-    response = await rpc_call(host, port, "get_chain", {})
-    blocks = response["data"]["blocks"]
-    if not blocks:
+    from_height = 0
+    response = await rpc_call(host, port, "get_headers", {"from_height": from_height})
+    headers = response["data"]["headers"]
+    if not headers:
         print("Chain height: -1")
         return
-    height = blocks[-1]["height"]
+    height = headers[-1]["height"]
     print(f"Chain height: {height}")
-    for block in blocks[-args.last :]:
-        tx_count = len(block.get("transactions", []))
-        block_hash = _block_hash_from_dict(block)
+
+    display_from = max(0, height - args.last + 1)
+    blocks_resp = await rpc_call(
+        host,
+        port,
+        "get_blocks",
+        {"from_height": display_from, "count": args.last},
+    )
+    blocks = blocks_resp["data"]["blocks"]
+    block_by_height = {b["height"]: b for b in blocks}
+
+    for header in headers[-args.last :]:
+        block = block_by_height.get(header["height"])
+        tx_count = len(block.get("transactions", [])) if block else "?"
+        block_hash = _header_hash(header)
         print(
-            f"  height={block['height']} hash={block_hash[:16]} "
-            f"txs={tx_count} ts={block['timestamp']}"
+            f"  height={header['height']} hash={block_hash[:16]} "
+            f"txs={tx_count} ts={header['timestamp']}"
         )
-
-
-def _block_hash_from_dict(block: dict) -> str:
-    from pacvo.block import Block
-
-    return Block.from_dict(block).block_hash
 
 
 def cmd_chain(args: argparse.Namespace) -> None:
