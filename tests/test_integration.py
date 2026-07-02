@@ -57,7 +57,7 @@ async def run_integration() -> None:
         miner_stakes = node_a.chain.state.stakes.get(wallet_a.address, [])
         assert len(miner_stakes) == h
         for i, entry in enumerate(miner_stakes, start=1):
-            assert entry["amount"] == 5 * COIN
+            assert entry["amount"] == stake_per_block
             assert entry["unlock_height"] == i + STAKE_LOCK_BLOCKS
 
         bal_a_before = node_a.get_balance(wallet_a.address)

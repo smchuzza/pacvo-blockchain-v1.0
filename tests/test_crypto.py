@@ -17,6 +17,7 @@ from pacvo.crypto import (
     sign_message,
     verify_signature,
 )
+from pacvo.params import BLOCK_REWARD, stake_split
 from pacvo.transaction import Transaction
 from pacvo.wallet import Wallet
 
@@ -71,7 +72,8 @@ assert tx.verify_signature()
 tx.amount = 9999
 assert not tx.verify_signature()
 
-cb = Transaction.coinbase(recipient, 4500000000, 500000000, 0)
+spendable, stake = stake_split(BLOCK_REWARD)
+cb = Transaction.coinbase(recipient, spendable, stake, 0)
 assert cb.verify_signature()
 assert cb.is_coinbase
 assert cb.sender == "COINBASE"

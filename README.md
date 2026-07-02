@@ -17,7 +17,7 @@ Addresses use the `pvo1` prefix followed by the first 20 bytes of `SHA-512(sign_
 
 | Parameter | Value |
 |-----------|-------|
-| Block reward | 50 PVO |
+| Block reward | 3 PVO |
 | Coin unit | 1 PVO = 10^8 base units |
 | Staking | 10% of each block reward auto-staked |
 | Stake lock | 128 blocks (~1.8 days at target block time) |
@@ -25,7 +25,7 @@ Addresses use the `pvo1` prefix followed by the first 20 bytes of `SHA-512(sign_
 | Difficulty retarget | Every 32 blocks, clamped to 4x adjustment |
 | Initial difficulty | `INITIAL_TARGET = 2^500` (fast mining for demos/tests) |
 
-Each mined block pays the miner 45 PVO spendable immediately and locks 5 PVO as stake until `unlock_height = block_height + 128`.
+Each mined block pays the miner 2.7 PVO spendable immediately and locks 0.3 PVO as stake until `unlock_height = block_height + 128`.
 
 ## Installation
 
@@ -113,11 +113,11 @@ Example output:
 
 ```
 Address: pvo1a04ed52a14c08443b721c92365fd244250968f71
-Spendable: 4635.00000000 PVO
-Staked: 515.00000000 PVO
+Spendable: 278.10000000 PVO
+Staked: 30.90000000 PVO
 Next nonce: 0
 Height: 103
-  Stake entry: 5.00000000 PVO (unlock height 129)
+  Stake entry: 0.30000000 PVO (unlock height 129)
   ...
 ```
 

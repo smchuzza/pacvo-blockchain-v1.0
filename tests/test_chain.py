@@ -65,7 +65,7 @@ ok, reason = chain.add_block(block3)
 assert ok, reason
 assert chain.height == 3
 
-chain.state.stakes[MINER] = [{"amount": 5 * 10**8, "unlock_height": 3}]
+chain.state.stakes[MINER] = [{"amount": stake, "unlock_height": 3}]
 chain.state.balances[MINER] = 0
 release_block = mine_block(chain, MINER, timestamp=block3.timestamp + 1)
 ok, reason = chain.add_block(release_block)
