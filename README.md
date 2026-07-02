@@ -25,8 +25,6 @@ Addresses use the `pvo1` prefix followed by the first 20 bytes of `SHA-512(sign_
 | Difficulty retarget | Every 32 blocks, clamped to 4x adjustment |
 | Initial difficulty | `2^486` at launch (~20 min blocks on a typical CPU) |
 
-Launch difficulty is calibrated for roughly 20-minute blocks. For fast local demos and integration tests, set `PACVO_DEMO=1` to use `2^500` instead. Demo chains use a different genesis target and are **not** compatible with mainnet-style chains.
-
 Each mined block pays the miner 2.7 PVO spendable immediately and locks 0.3 PVO as stake until `unlock_height = block_height + 128`.
 
 ## Installation
@@ -44,7 +42,6 @@ pip install -r requirements.txt
 ```bash
 .venv/bin/python tests/test_crypto.py
 .venv/bin/python tests/test_chain.py
-PACVO_DEMO=1 .venv/bin/python tests/test_integration.py
 ```
 
 ## Two-node demo
@@ -70,8 +67,8 @@ Save the printed addresses as `ADDR_A` and `ADDR_B`.
 In separate terminals:
 
 ```bash
-# Terminal 1 — miner (PACVO_DEMO=1 for fast blocks in local demo)
-PACVO_DEMO=1 .venv/bin/python cli.py run \
+# Terminal 1 — miner (first block takes ~20 minutes at launch difficulty)
+.venv/bin/python cli.py run \
   --wallet /tmp/pacvo-demo/wa.json \
   --data /tmp/pacvo-demo/data-a \
   --host 127.0.0.1 --port 9333 --mine
@@ -79,14 +76,14 @@ PACVO_DEMO=1 .venv/bin/python cli.py run \
 
 ```bash
 # Terminal 2 — syncing peer
-PACVO_DEMO=1 .venv/bin/python cli.py run \
+.venv/bin/python cli.py run \
   --wallet /tmp/pacvo-demo/wb.json \
   --data /tmp/pacvo-demo/data-b \
   --host 127.0.0.1 --port 9334 \
   --peers 127.0.0.1:9333
 ```
 
-Wait a few seconds for blocks to propagate.
+Wait for the miner to find the first block (on the order of 20 minutes), then for subsequent blocks to propagate.
 
 ### 3. Confirm sync on node B
 
@@ -94,15 +91,13 @@ Wait a few seconds for blocks to propagate.
 .venv/bin/python cli.py chain --node 127.0.0.1:9334 --last 5
 ```
 
-Example output:
+Example output (after mining has progressed):
 
 ```
-Chain height: 102
-  height=98 hash=0003505ed2df1ac5 txs=1 ts=1782993294
-  height=99 hash=0001c101bf45f36c txs=1 ts=1782993294
-  height=100 hash=00030cfb1e21f2fd txs=1 ts=1782993295
-  height=101 hash=00023528df0f34d5 txs=1 ts=1782993295
-  height=102 hash=00019864fb7516cb txs=1 ts=1782993295
+Chain height: 3
+  height=1 hash=000... txs=1 ts=...
+  height=2 hash=000... txs=1 ts=...
+  height=3 hash=000... txs=1 ts=...
 ```
 
 ### 4. Check miner balance on node A
@@ -111,14 +106,14 @@ Chain height: 102
 .venv/bin/python cli.py balance --address ADDR_A --node 127.0.0.1:9333
 ```
 
-Example output:
+Example output (after several blocks):
 
 ```
-Address: pvo1a04ed52a14c08443b721c92365fd244250968f71
-Spendable: 278.10000000 PVO
-Staked: 30.90000000 PVO
+Address: pvo1...
+Spendable: 8.10000000 PVO
+Staked: 0.90000000 PVO
 Next nonce: 0
-Height: 103
+Height: 3
   Stake entry: 0.30000000 PVO (unlock height 129)
   ...
 ```
@@ -142,7 +137,7 @@ Example output:
 {'error': '', 'ok': True}
 ```
 
-Wait a few seconds for the miner to include the transaction.
+Wait for the miner to include the transaction in a new block (another ~20 minutes per block at launch difficulty).
 
 ### 6. Confirm recipient balance on node B
 
@@ -157,7 +152,7 @@ Address: pvo1af991eb1259abcd16c878b3d0f2c9b2caff1a041
 Spendable: 2.50000000 PVO
 Staked: 0.00000000 PVO
 Next nonce: 0
-Height: 129
+Height: 4
 ```
 
 Stop both node processes with Ctrl+C when finished.
@@ -176,7 +171,7 @@ pacvo/
   node.py         # Mempool, handlers, gossip
   miner.py        # Candidate builder and mining loop
 cli.py            # Command-line interface
-tests/            # Unit and integration tests
+tests/            # Unit tests (no live mining)
 ```
 
 ## Security disclaimer
