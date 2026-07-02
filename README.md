@@ -23,7 +23,9 @@ Addresses use the `pvo1` prefix followed by the first 20 bytes of `SHA-512(sign_
 | Stake lock | 128 blocks (~1.8 days at target block time) |
 | Target block time | 20 minutes (1200 seconds) |
 | Difficulty retarget | Every 32 blocks, clamped to 4x adjustment |
-| Initial difficulty | `INITIAL_TARGET = 2^500` (fast mining for demos/tests) |
+| Initial difficulty | `2^486` at launch (~20 min blocks on a typical CPU) |
+
+Launch difficulty is calibrated for roughly 20-minute blocks. For fast local demos and integration tests, set `PACVO_DEMO=1` to use `2^500` instead. Demo chains use a different genesis target and are **not** compatible with mainnet-style chains.
 
 Each mined block pays the miner 2.7 PVO spendable immediately and locks 0.3 PVO as stake until `unlock_height = block_height + 128`.
 
@@ -42,7 +44,7 @@ pip install -r requirements.txt
 ```bash
 .venv/bin/python tests/test_crypto.py
 .venv/bin/python tests/test_chain.py
-.venv/bin/python tests/test_integration.py
+PACVO_DEMO=1 .venv/bin/python tests/test_integration.py
 ```
 
 ## Two-node demo
@@ -68,8 +70,8 @@ Save the printed addresses as `ADDR_A` and `ADDR_B`.
 In separate terminals:
 
 ```bash
-# Terminal 1 — miner
-.venv/bin/python cli.py run \
+# Terminal 1 — miner (PACVO_DEMO=1 for fast blocks in local demo)
+PACVO_DEMO=1 .venv/bin/python cli.py run \
   --wallet /tmp/pacvo-demo/wa.json \
   --data /tmp/pacvo-demo/data-a \
   --host 127.0.0.1 --port 9333 --mine
@@ -77,7 +79,7 @@ In separate terminals:
 
 ```bash
 # Terminal 2 — syncing peer
-.venv/bin/python cli.py run \
+PACVO_DEMO=1 .venv/bin/python cli.py run \
   --wallet /tmp/pacvo-demo/wb.json \
   --data /tmp/pacvo-demo/data-b \
   --host 127.0.0.1 --port 9334 \

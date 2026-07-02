@@ -7,6 +7,8 @@ import sys
 import tempfile
 import time
 
+os.environ["PACVO_DEMO"] = "1"
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from pacvo.network import rpc_call
