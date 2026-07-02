@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+/tmp/pacvo-demo/
+demo/
+scratch/
+data-a/
+data-b/
+wa.json
+wb.json
+*.log
