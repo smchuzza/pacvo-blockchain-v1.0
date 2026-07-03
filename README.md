@@ -195,6 +195,4 @@ tests/            # Unit tests (no live mining)
 
 ## Security disclaimer
 
-Pacvo is an educational prototype. It has not been formally audited and must not be used to secure real funds. Post-quantum algorithm bindings come from maintained libraries, but the surrounding consensus, networking, and wallet tooling are simplified for learning purposes.
-
 On a small network with low aggregate hashrate, the chain is vulnerable to 51% attacks and deep reorganizations up to `MAX_REORG_DEPTH` (128 blocks). Coinbase maturity (128 blocks) delays spendability of mining rewards and mitigates—but does not eliminate—the risk that a reorg could reverse recently mined rewards. Do not treat Pacvo as secure financial infrastructure.
