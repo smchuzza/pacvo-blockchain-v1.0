@@ -15,7 +15,7 @@ NONCE_CHUNK = 2000
 
 def build_candidate(chain, mempool_txs: list, miner_address: str) -> Block:
     state = chain.state.copy()
-    chain._release_matured_stakes(state, chain.height + 1)
+    chain._release_matured(state, chain.height + 1)
     sorted_txs = sorted(mempool_txs, key=lambda tx: tx.fee, reverse=True)
     selected = []
     fees = 0

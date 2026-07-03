@@ -17,14 +17,17 @@ from pacvo.crypto import (
     sign_message,
     verify_signature,
 )
+from pacvo.block import Block
 from pacvo.params import (
     HANDSHAKE_TIMEOUT,
     MAX_BLOCK_BATCH,
     MAX_CONNS_PER_IP,
     MAX_FRAME,
+    MAX_HEADERS,
     MAX_MSG_RATE,
     MAX_PEERS,
 )
+from pacvo.transaction import Transaction
 
 logger = logging.getLogger("pacvo.p2p")
 
@@ -36,6 +39,16 @@ _RESPONSE_FOR = {
     "get_headers": "headers",
     "get_blocks": "blocks",
 }
+
+
+async def _sign_async(sk: bytes, msg: bytes) -> bytes:
+    return await asyncio.get_running_loop().run_in_executor(None, sign_message, sk, msg)
+
+
+async def _verify_async(pk: bytes, msg: bytes, sig: bytes) -> bool:
+    return await asyncio.get_running_loop().run_in_executor(
+        None, verify_signature, pk, msg, sig
+    )
 
 
 async def _read_frame(reader: asyncio.StreamReader) -> bytes:
@@ -91,6 +104,7 @@ class PeerConnection:
         self.peer_height = -1
         self.peer_port = -1
         self._msg_times: list[float] = []
+        self._conn_counted = False
 
     async def send(self, msg_type: str, data: dict) -> None:
         payload = encrypt_payload(
@@ -131,6 +145,7 @@ class P2PNode:
         self.peers: list[PeerConnection] = []
         self._server: asyncio.Server | None = None
         self._inbound_by_ip: dict[str, int] = {}
+        self._conn_count = 0
 
     def _identity_keys(self) -> tuple[bytes, bytes]:
         return self.node.identity_public_key, self.node.identity_secret_key
@@ -142,7 +157,7 @@ class P2PNode:
 
         kem_pub, kem_sk = generate_kem_keypair()
         identity_pub_l, identity_sk_l = self._identity_keys()
-        sig_l = sign_message(
+        sig_l = await _sign_async(
             identity_sk_l, b"pacvo-hs-listener" + kem_pub + challenge_d
         )
         await _write_frame(writer, kem_pub)
@@ -153,7 +168,7 @@ class P2PNode:
         identity_pub_d = await _read_frame(reader)
         sig_d = await _read_frame(reader)
 
-        if not verify_signature(
+        if not await _verify_async(
             identity_pub_d,
             b"pacvo-hs-dialer" + ciphertext + kem_pub + challenge_d,
             sig_d,
@@ -193,7 +208,7 @@ class P2PNode:
         identity_pub_l = await _read_frame(reader)
         sig_l = await _read_frame(reader)
 
-        if not verify_signature(
+        if not await _verify_async(
             identity_pub_l,
             b"pacvo-hs-listener" + kem_pub + challenge_d,
             sig_l,
@@ -205,7 +220,7 @@ class P2PNode:
             self.node.check_peer_pin(remote_label, fingerprint)
 
         ciphertext, shared_secret = kem_encapsulate(kem_pub)
-        sig_d = sign_message(
+        sig_d = await _sign_async(
             identity_sk_d,
             b"pacvo-hs-dialer" + ciphertext + kem_pub + challenge_d,
         )
@@ -241,12 +256,20 @@ class P2PNode:
             return peername[0]
         return "unknown"
 
-    def _total_connections(self) -> int:
-        return len(self.peers) + sum(self._inbound_by_ip.values())
+    def _register_connection(self, peer: PeerConnection) -> None:
+        if not peer._conn_counted:
+            peer._conn_counted = True
+            self._conn_count += 1
+
+    def _unregister_connection(self, peer: PeerConnection) -> None:
+        if peer._conn_counted:
+            peer._conn_counted = False
+            self._conn_count = max(0, self._conn_count - 1)
 
     async def _remove_peer(self, peer: PeerConnection) -> None:
         if peer in self.peers:
             self.peers.remove(peer)
+        self._unregister_connection(peer)
         await peer.close()
 
     def _clamp_block_batch(self, from_height: int, count: int) -> list[dict]:
@@ -275,7 +298,10 @@ class P2PNode:
                 asyncio.create_task(self.node.sync_from_peer(peer))
         elif msg_type == "get_headers":
             from_height = max(0, int(data.get("from_height", 0)))
-            headers = [b.header_dict() for b in self.node.chain.blocks[from_height:]]
+            headers = [
+                b.header_dict()
+                for b in self.node.chain.blocks[from_height : from_height + MAX_HEADERS]
+            ]
             await peer.send("headers", {"headers": headers})
         elif msg_type == "headers":
             await self.node.handle_headers(data.get("headers", []), peer)
@@ -287,12 +313,31 @@ class P2PNode:
         elif msg_type == "blocks":
             await self.node.handle_blocks(data.get("blocks", []), peer)
         elif msg_type == "new_block":
-            ok, err = self.node.handle_new_block(data.get("block", {}), origin=peer)
+            block_dict = data.get("block", {})
+            block = Block.from_dict(block_dict)
+            loop = asyncio.get_running_loop()
+            ok, reason = await loop.run_in_executor(
+                None, self.node.chain.validate_block_signatures, block
+            )
+            if not ok:
+                await peer.send("ack", {"ok": False, "error": reason})
+                return
+            ok, err = self.node.handle_new_block(
+                block_dict, origin=peer, sigs_ok=True
+            )
             await peer.send("ack", {"ok": ok, "error": err})
             if not ok and err and _needs_chain_sync(err):
                 asyncio.create_task(self.node.sync_from_peer(peer))
         elif msg_type == "new_tx":
-            ok, err = self.node.handle_new_tx(data.get("tx", {}), origin=peer)
+            tx_dict = data.get("tx", {})
+            tx = Transaction.from_dict(tx_dict)
+            if not tx.is_coinbase:
+                if not await _verify_async(
+                    tx.sender_public_key, tx.signing_payload(), tx.signature
+                ):
+                    await peer.send("ack", {"ok": False, "error": "invalid signature"})
+                    return
+            ok, err = self.node.handle_new_tx(tx_dict, origin=peer, sig_ok=True)
             await peer.send("ack", {"ok": ok, "error": err})
         elif msg_type == "get_balance":
             address = data.get("address", "")
@@ -328,7 +373,7 @@ class P2PNode:
                 writer.close()
                 await writer.wait_closed()
                 return
-            if self._total_connections() >= MAX_PEERS:
+            if self._conn_count >= MAX_PEERS:
                 logger.warning("rejecting inbound: peer limit reached")
                 writer.close()
                 await writer.wait_closed()
@@ -347,6 +392,7 @@ class P2PNode:
                 self._remote_label(writer),
                 fingerprint,
             )
+            self._register_connection(peer)
             await peer.send(
                 "hello", {"height": self.node.chain.height, "port": self.port}
             )
@@ -371,9 +417,10 @@ class P2PNode:
     async def connect(self, host: str, port: int) -> PeerConnection | None:
         reader: asyncio.StreamReader | None = None
         writer: asyncio.StreamWriter | None = None
+        peer: PeerConnection | None = None
         remote_label = f"{host}:{port}"
         try:
-            if self._total_connections() >= MAX_PEERS:
+            if self._conn_count >= MAX_PEERS:
                 logger.warning("not connecting to %s: peer limit reached", remote_label)
                 return None
             reader, writer = await asyncio.open_connection(host, port)
@@ -392,13 +439,14 @@ class P2PNode:
             peer = PeerConnection(
                 reader, writer, key_d2l, key_l2d, remote_label, fingerprint
             )
+            self._register_connection(peer)
             await peer.send(
                 "hello", {"height": self.node.chain.height, "port": self.port}
             )
             while True:
                 msg = await peer.recv()
                 if msg is None:
-                    await peer.close()
+                    await self._remove_peer(peer)
                     return None
                 if msg.get("type") == "hello":
                     hello_data = msg.get("data", {})
@@ -412,7 +460,9 @@ class P2PNode:
             return peer
         except Exception:
             logger.exception("failed to connect to %s:%s", host, port)
-            if writer is not None:
+            if peer is not None:
+                await self._remove_peer(peer)
+            elif writer is not None:
                 try:
                     writer.close()
                     await writer.wait_closed()
@@ -455,7 +505,7 @@ async def rpc_handshake(
     identity_pub_l = await asyncio.wait_for(_read_frame(reader), timeout=HANDSHAKE_TIMEOUT)
     sig_l = await asyncio.wait_for(_read_frame(reader), timeout=HANDSHAKE_TIMEOUT)
 
-    if not verify_signature(
+    if not await _verify_async(
         identity_pub_l,
         b"pacvo-hs-listener" + kem_pub + challenge_d,
         sig_l,
@@ -463,7 +513,7 @@ async def rpc_handshake(
         raise ValueError("listener identity signature verification failed")
 
     ciphertext, shared_secret = kem_encapsulate(kem_pub)
-    sig_d = sign_message(
+    sig_d = await _sign_async(
         identity_sk,
         b"pacvo-hs-dialer" + ciphertext + kem_pub + challenge_d,
     )

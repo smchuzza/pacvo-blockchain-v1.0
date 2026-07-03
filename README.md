@@ -24,13 +24,14 @@ Addresses use the `pvo1` prefix followed by the full 64-byte `SHA-512(sign_publi
 | Minimum fee | 0.0001 PVO (10,000 base units) |
 | Staking | 10% of each block reward auto-staked |
 | Stake lock | 128 blocks (~1.8 days at target block time) |
+| Coinbase maturity | 128 blocks (spendable reward locked until deep) |
 | Target block time | 20 minutes (1200 seconds) |
 | Difficulty retarget | Every 32 blocks, clamped to 4x adjustment |
 | Initial difficulty | `2^486` at launch (~20 min blocks on a typical CPU) |
 | Max reorg depth | 128 blocks |
 | Timestamps | Strictly greater than median-time-past (11 blocks); at most 600 s ahead of local clock |
 
-Each mined block pays the miner 2.7 PVO spendable immediately and locks 0.3 PVO as stake until `unlock_height = block_height + 128`.
+Each mined block pays the miner 2.7 PVO as immature coinbase (locked until `unlock_height = block_height + 128`) and locks 0.3 PVO as stake until `unlock_height = block_height + 128`. Both mature into spendable balance when their unlock height is reached. Because `COINBASE_MATURITY` equals `MAX_REORG_DEPTH` (128), a miner must wait 128 confirmations before spending a block reward.
 
 ## Resource limits
 
@@ -41,6 +42,7 @@ Each mined block pays the miner 2.7 PVO spendable immediately and locks 0.3 PVO 
 | Max mempool transactions | 1,000 (evict lowest fee when full) |
 | Max P2P frame size | 8 MiB |
 | Max peers | 32 total connections |
+| Max headers per response | 4,000 |
 | Max inbound per IP | 3 |
 | Handshake timeout | 20 seconds |
 | Inbound message rate | 50 messages/second per connection |
@@ -64,7 +66,7 @@ pip install -r requirements.txt
 .venv/bin/python tests/test_network.py
 ```
 
-SPHINCS+-256s signing is slow (on the order of seconds per signature); network tests use only a handful of handshakes.
+SPHINCS+-256s signing is slow (on the order of seconds per signature); network tests use only a handful of handshakes. All SPHINCS+ signing and verification on the asyncio event loop is offloaded to a thread-pool executor so peers cannot block the node during handshakes or transaction/block signature checks.
 
 ## Two-node demo
 
@@ -130,6 +132,8 @@ Wait for the miner to find the first block (on the order of 20 minutes), then fo
 .venv/bin/python cli.py balance --address ADDR_A --node 127.0.0.1:9333
 ```
 
+Spendable balance excludes immature coinbase and staked amounts. Immature coinbase and locked entries are listed separately with their unlock heights.
+
 ### 5. Send PVO from wallet A to wallet B
 
 ```bash
@@ -175,12 +179,22 @@ tests/            # Unit tests (no live mining)
 
 **Encrypted wallets.** Wallet secret keys are encrypted with AES-256-GCM after key derivation via `bcrypt.kdf` (100 rounds, 16-byte salt from `os.urandom`, which is seeded from hardware timing jitter and other kernel entropy sources on Linux). Wrong passphrases raise a clear error.
 
-**Headers-first sync.** Peers exchange header chains via `get_headers` / `headers`, validate proof-of-work and retarget rules without bodies, then fetch block bodies in batches via `get_blocks` / `blocks`. Reorgs deeper than 128 blocks are rejected.
+**Headers-first sync.** Peers exchange header chains via `get_headers` / `headers`, validate proof-of-work and retarget rules without bodies, then fetch block bodies in batches via `get_blocks` / `blocks`. Reorgs deeper than 128 blocks are rejected. Block responses during sync are tied to the requesting peer; unsolicited `blocks` messages are ignored. Header responses are capped at 4,000 entries.
 
-**Full-width addresses.** The entire 512-bit SHA-512 digest of the signing public key is used, eliminating truncation collision surface.
+**Non-blocking PQ crypto.** SPHINCS+ signing and verification (handshakes, incoming transactions, block signature pre-checks) run in a thread-pool executor via `run_in_executor`, keeping the asyncio event loop responsive.
+
+**Coinbase maturity.** Mining rewards are locked for 128 blocks (`COINBASE_MATURITY`) before becoming spendable, matching `MAX_REORG_DEPTH`. This mitigates—but does not eliminate—reward reversal after a deep reorg.
+
+**Atomic persistence.** Chain state (`chain.json`), node identity (`identity.json`), and peer pins (`known_peers.json`) are written to a temporary file in the same directory and atomically replaced with `os.replace()`.
+
+**Address validation.** Recipient addresses must be `pvo1` followed by 128 lowercase hex characters. Invalid addresses are rejected in transaction validation and in the `send` CLI command.
+
+**Mempool simulation cache.** The node maintains an incrementally updated simulated state for mempool admission instead of rebuilding from scratch on every transaction.
 
 **Median-time-past.** Block timestamps must be strictly greater than the median of the previous 11 block timestamps and no more than 600 seconds in the future.
 
 ## Security disclaimer
 
-Pacvo is an educational prototype. It has not been audited and must not be used to secure real funds. Post-quantum algorithm bindings come from maintained libraries, but the surrounding consensus, networking, and wallet tooling are simplified for learning purposes.
+Pacvo is an educational prototype. It has not been formally audited and must not be used to secure real funds. Post-quantum algorithm bindings come from maintained libraries, but the surrounding consensus, networking, and wallet tooling are simplified for learning purposes.
+
+On a small network with low aggregate hashrate, the chain is vulnerable to 51% attacks and deep reorganizations up to `MAX_REORG_DEPTH` (128 blocks). Coinbase maturity (128 blocks) delays spendability of mining rewards and mitigates—but does not eliminate—the risk that a reorg could reverse recently mined rewards. Do not treat Pacvo as secure financial infrastructure.

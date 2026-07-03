@@ -7,7 +7,7 @@ import os
 import time
 
 from pacvo.block import Block
-from pacvo.crypto import sha512_hex
+from pacvo.crypto import is_valid_address, sha512_hex
 from pacvo.network import rpc_call
 from pacvo.params import COIN
 from pacvo.transaction import Transaction
@@ -80,6 +80,8 @@ def cmd_run(args: argparse.Namespace) -> None:
 
 
 async def _send(args: argparse.Namespace) -> None:
+    if not is_valid_address(args.to):
+        raise SystemExit(f"invalid recipient address: {args.to}")
     wallet = load_wallet(args.wallet)
     host, port = parse_host_port(args.node)
     response = await rpc_call(host, port, "get_balance", {"address": wallet.address})
@@ -108,9 +110,15 @@ async def _balance(args: argparse.Namespace) -> None:
     data = response["data"]
     print(f"Address: {data['address']}")
     print(f"Spendable: {format_pvo(data['spendable'])}")
+    print(f"Immature (coinbase): {format_pvo(data.get('immature', 0))}")
     print(f"Staked: {format_pvo(data['staked'])}")
     print(f"Next nonce: {data['next_nonce']}")
     print(f"Height: {data['height']}")
+    for entry in data.get("locked_entries", []):
+        print(
+            f"  Locked entry: {format_pvo(entry['amount'])} "
+            f"(unlock height {entry['unlock_height']})"
+        )
     for entry in data.get("stake_entries", []):
         print(
             f"  Stake entry: {format_pvo(entry['amount'])} "

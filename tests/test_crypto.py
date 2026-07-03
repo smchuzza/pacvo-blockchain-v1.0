@@ -10,6 +10,7 @@ from pacvo.crypto import (
     encrypt_payload,
     generate_kem_keypair,
     generate_sign_keypair,
+    is_valid_address,
     kem_decapsulate,
     kem_encapsulate,
     sha512,
@@ -48,6 +49,8 @@ assert decrypt_payload(aes_key, blob) == plaintext
 address = derive_address(public_key)
 assert address.startswith("pvo1")
 assert len(address) == 4 + 128
+assert is_valid_address(address)
+assert not is_valid_address("pvo1" + "ZZ" * 64)
 
 wallet = Wallet.generate()
 address = wallet.address

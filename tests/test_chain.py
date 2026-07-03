@@ -6,9 +6,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from pacvo.block import Block
 from pacvo.chain import Blockchain, State, median_time_past
-from pacvo.crypto import canonical_json, derive_address
+from pacvo.crypto import canonical_json, derive_address, is_valid_address
 from pacvo.params import (
     BLOCK_REWARD,
+    COINBASE_MATURITY,
     GENESIS_TIMESTAMP,
     INITIAL_TARGET,
     MAX_BLOCK_BYTES,
@@ -93,12 +94,35 @@ state = State()
 stake_amt = 30_000_000
 state.stakes[MINER] = [{"amount": stake_amt, "unlock_height": 5}]
 state.balances[MINER] = 0
-chain._release_matured_stakes(state, 4)
+chain._release_matured(state, 4)
 assert state.spendable(MINER) == 0
 assert state.staked(MINER) == stake_amt
-chain._release_matured_stakes(state, 5)
+chain._release_matured(state, 5)
 assert state.spendable(MINER) == stake_amt
 assert state.staked(MINER) == 0
+
+# --- Coinbase maturity release ---
+coinbase_state = State()
+spendable_reward, stake = stake_split(BLOCK_REWARD)
+cb_tx = Transaction.coinbase(MINER, spendable_reward, stake, 1)
+chain._apply_coinbase(coinbase_state, cb_tx, 1)
+assert coinbase_state.spendable(MINER) == 0
+assert coinbase_state.immature(MINER) == spendable_reward
+assert coinbase_state.staked(MINER) == stake
+assert coinbase_state.locked[MINER][0]["unlock_height"] == 1 + COINBASE_MATURITY
+chain._release_matured(coinbase_state, 1 + COINBASE_MATURITY - 1)
+assert coinbase_state.spendable(MINER) == 0
+chain._release_matured(coinbase_state, 1 + COINBASE_MATURITY)
+assert coinbase_state.spendable(MINER) == spendable_reward + stake
+assert coinbase_state.immature(MINER) == 0
+assert coinbase_state.staked(MINER) == 0
+
+# --- Address validation ---
+assert is_valid_address(MINER)
+assert is_valid_address(RECIPIENT)
+assert not is_valid_address("alice")
+assert not is_valid_address("pvo1" + "gg" * 64)
+assert not is_valid_address("pvo1" + "aa" * 63)
 
 # --- validate_transaction rules ---
 wallet = Wallet.generate()
@@ -171,6 +195,19 @@ bad_sig_tx.signature = bad_sig_tx.signature[:-1] + bytes([bad_sig_tx.signature[-
 ok, reason = chain.validate_transaction(bad_sig_tx, state)
 assert not ok
 assert "signature" in reason
+
+invalid_recipient_tx = Transaction(
+    sender_public_key=wallet.sign_public_key,
+    recipient="alice",
+    amount=1,
+    fee=MIN_FEE,
+    nonce=0,
+    timestamp=int(time.time()),
+)
+invalid_recipient_tx.sign(wallet.sign_secret_key)
+ok, reason = chain.validate_transaction(invalid_recipient_tx, state)
+assert not ok
+assert "recipient" in reason
 
 # --- Block validation rejects insufficient PoW ---
 chain = Blockchain()

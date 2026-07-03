@@ -6,6 +6,7 @@ import tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from pacvo.crypto import (
+    derive_address,
     generate_kem_keypair,
     generate_sign_keypair,
     kem_decapsulate,
@@ -19,10 +20,9 @@ from pacvo.wallet import Wallet
 
 
 class _StubWallet:
-    address = "pvo1" + "00" * 64
-
     def __init__(self) -> None:
         self.sign_public_key, self.sign_secret_key = generate_sign_keypair()
+        self.address = derive_address(self.sign_public_key)
 
 
 async def _start_node(port: int, data_dir: str) -> Node:

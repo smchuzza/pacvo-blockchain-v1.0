@@ -52,6 +52,13 @@ def derive_address(sign_public_key: bytes) -> str:
     return "pvo1" + sha512(sign_public_key).hex()
 
 
+def is_valid_address(addr) -> bool:
+    if not isinstance(addr, str) or not addr.startswith("pvo1") or len(addr) != 132:
+        return False
+    hexpart = addr[4:]
+    return len(hexpart) == 128 and all(c in "0123456789abcdef" for c in hexpart)
+
+
 def identity_fingerprint(public_key: bytes) -> str:
     return sha512(public_key)[:16].hex()
 
