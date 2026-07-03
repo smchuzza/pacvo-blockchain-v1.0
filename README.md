@@ -1,6 +1,6 @@
 # Pacvo (PVO)
 
-Pacvo is an educational post-quantum cryptocurrency full node written in Python. It implements a proof-of-work blockchain with account-based transfers, automatic staking of mining rewards, and an authenticated encrypted peer-to-peer network. The design goal is to demonstrate how modern post-quantum primitives can be composed into a working ledger—not to serve as production financial infrastructure.
+Pacvo is an post-quantum cryptocurrency full node written in Python. It implements a proof-of-work blockchain with account-based transfers, automatic staking of mining rewards, and an authenticated encrypted peer-to-peer network. The design goal is to demonstrate how modern post-quantum primitives can be composed into a working ledger—not to serve as production financial infrastructure.
 
 ## Cryptography stack
 
