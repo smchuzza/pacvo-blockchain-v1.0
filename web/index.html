@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Pacvo Post-Quantum Multi-Layer Web Interface — Wallet, Web Miner, L2 Token & NFT Studio, and L3 PVO-Fi Financial Economy">
+  <title>Pacvo Console — Post-Quantum Blockchain, EVM & PVO-Fi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Navigation Header -->
+  <header class="navbar" id="app-header">
+    <div class="brand-container">
+      <div class="brand-logo" id="brand-logo">P</div>
+      <div>
+        <div class="brand-title" id="brand-title">PACVO CONSOLE</div>
+      </div>
+      <span class="brand-badge" id="protocol-version-badge">v3.0 PQ + EVM</span>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs" role="tablist" id="main-nav-tabs">
+      <button class="tab-btn active" id="btn-tab-dashboard" data-tab="tab-dashboard" role="tab">Dashboard</button>
+      <button class="tab-btn" id="btn-tab-wallet" data-tab="tab-wallet" role="tab">Wallet</button>
+      <button class="tab-btn" id="btn-tab-miner" data-tab="tab-miner" role="tab">Node Miner</button>
+      <button class="tab-btn" id="btn-tab-l2" data-tab="tab-l2" role="tab">L2 Studio</button>
+      <button class="tab-btn" id="btn-tab-l3" data-tab="tab-l3" role="tab">L3 PVO-Fi</button>
+      <button class="tab-btn" id="btn-tab-htlc" data-tab="tab-htlc" role="tab">HTLC & CC Swap</button>
+      <button class="tab-btn" id="btn-tab-node" data-tab="tab-node" role="tab">Node / RPC</button>
+    </nav>
+
+    <!-- Header Actions -->
+    <div class="header-actions">
+      <div class="node-status-pill" id="node-status-pill">
+        <span class="status-indicator" id="node-status-indicator"></span>
+        <span id="node-status-text">Client Engine Active</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="main-content" id="app-main-content">
+
+    <!-- =========================================================================
+         TAB 1: DASHBOARD
+         ========================================================================= -->
+    <section class="tab-pane active" id="tab-dashboard" role="tabpanel">
+      <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+        
+        <!-- Welcome Banner -->
+        <div class="card" id="dashboard-hero-card" style="background: linear-gradient(180deg, var(--bg-surface-raised) 0%, var(--bg-surface) 100%);">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div>
+              <h1 style="margin-bottom: 0;">Pacvo Multi-Layer Architecture</h1>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+              <button class="btn btn-primary" id="btn-quick-mine" onclick="switchToTab('tab-miner')">Open Node Miner</button>
+              <button class="btn btn-secondary" id="btn-quick-wallet" onclick="switchToTab('tab-wallet')">Manage Wallet</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Top Metric Grid -->
+        <div class="grid-3" id="dashboard-metrics-grid">
+          <div class="stat-tile" id="tile-height">
+            <span class="stat-label">Block Tip Height</span>
+            <span class="stat-value" id="dash-block-height">#14</span>
+            <span class="stat-subtext">Difficulty Target: <code class="mono" id="dash-target-preview">3fffffff...</code></span>
+          </div>
+
+          <div class="stat-tile" id="tile-balance">
+            <span class="stat-label">Spendable PVO</span>
+            <span class="stat-value" id="dash-spendable-pvo">50.00000000</span>
+            <span class="stat-subtext">Staked Lock: <span id="dash-staked-pvo">25.00000000 PVO</span></span>
+          </div>
+
+          <div class="stat-tile" id="tile-l3-epoch">
+            <span class="stat-label">L3 Economic Epoch</span>
+            <span class="stat-value" id="dash-epoch-num">Epoch 0</span>
+            <span class="stat-subtext">Clock: Block <span id="dash-epoch-block">14</span> / 100</span>
+          </div>
+        </div>
+
+        <!-- Advanced: System Activity Log -->
+        <details class="advanced-details">
+          <summary class="advanced-summary">⚙️ Advanced System Activity Log</summary>
+          <div class="advanced-content">
+            <div class="card" id="card-activity-log" style="margin: 0; border: none; background: transparent; padding: 0;">
+              <div class="card-header" style="padding-top: 0;">
+                <span class="card-title">Multi-Layer System Log</span>
+                <button class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="clearSystemLog()">Clear Log</button>
+              </div>
+              <div class="log-console" id="system-activity-console">
+                <!-- Dynamic Log Items -->
+              </div>
+            </div>
+          </div>
+        </details>
+
+      </div>
+    </section>
+
+    <!-- =========================================================================
+         TAB 2: WALLET
+         ========================================================================= -->
+    <section class="tab-pane" id="tab-wallet" role="tabpanel">
+      <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+
+        <!-- Active Wallet Banner -->
+        <div class="card" id="wallet-identity-card">
+          <div class="card-header">
+            <span class="card-title">Active Account Credentials</span>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <button class="btn btn-secondary" id="btn-sync-wallet" onclick="syncWalletFromNode()">🔄 Sync Node Balance</button>
+              <button class="btn btn-secondary" id="btn-copy-address" onclick="copyWalletAddress()">Copy Address</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Native Post-Quantum L1 Address (Bech32 SPHINCS+)</label>
+            <div class="badge-mono" id="wallet-native-address" style="padding: 0.6rem; word-break: break-all;">pvo1...</div>
+          </div>
+
+          <div class="grid-3" style="margin-top: 0.5rem;">
+            <div class="stat-tile">
+              <span class="stat-label">Spendable Balance</span>
+              <span class="stat-value" id="wallet-spendable-bal" style="color: var(--status-success);">0.00000000 PVO</span>
+            </div>
+            <div class="stat-tile">
+              <span class="stat-label">Timelocked Stake</span>
+              <span class="stat-value" id="wallet-staked-bal">0.00000000 PVO</span>
+            </div>
+            <div class="stat-tile">
+              <span class="stat-label">Immature Coinbase</span>
+              <span class="stat-value" id="wallet-immature-bal" style="color: var(--status-warning);">0.00000000 PVO</span>
+            </div>
+          </div>
+
+          <!-- Advanced Wallet Diagnostics Collapsible -->
+          <details class="advanced-details" style="margin-top: 1rem;">
+            <summary class="advanced-summary">⚙️ Advanced Account Diagnostics (EVM 0x Address & Nonce)</summary>
+            <div class="advanced-content">
+              <div class="grid-2">
+                <div class="form-group">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                    <label class="form-label" style="margin-bottom: 0;">EVM Compatibility Address (Shanghai 0x-Hex)</label>
+                    <button class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.72rem;" onclick="copyEvmAddress()">Copy 0x</button>
+                  </div>
+                  <div class="badge-mono" id="wallet-evm-address" style="padding: 0.6rem; word-break: break-all;">0x...</div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Account Nonce</label>
+                  <div class="badge-mono" id="wallet-nonce-val" style="padding: 0.6rem;">0</div>
+                </div>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <!-- WALLET CREATION & IMPORT SECTION -->
+        <div class="grid-2">
+          <!-- CREATE NEW WALLET -->
+          <div class="card" id="card-create-wallet">
+            <div class="card-header">
+              <span class="card-title">🔐 Create New SPHINCS+ Wallet</span>
+            </div>
+            <p>Generate a new post-quantum SPHINCS+ keypair encrypted with bcrypt KDF. Produces a <code>wallet.json</code> file compatible with the Pacvo Node & CLI.</p>
+            <form id="form-create-wallet" onsubmit="handleCreateWallet(event)">
+              <div style="display: flex; flex-direction: column; gap: 0.85rem;">
+                <div class="form-group">
+                  <label class="form-label" for="new-wallet-passphrase">Wallet Passphrase</label>
+                  <input type="password" class="form-input" id="new-wallet-passphrase" placeholder="Enter secure passphrase..." required autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="new-wallet-confirm">Confirm Passphrase</label>
+                  <input type="password" class="form-input" id="new-wallet-confirm" placeholder="Confirm passphrase..." required autocomplete="new-password">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block" id="btn-submit-create-wallet">Generate & Encrypt Wallet</button>
+              </div>
+            </form>
+
+            <!-- Created Wallet Result Box -->
+            <div id="created-wallet-result" style="display: none; margin-top: 1rem; padding: 0.75rem; background: var(--bg-surface-raised); border: 1px solid var(--border-subtle); border-radius: 6px;">
+              <div style="font-weight: 600; color: var(--status-success); margin-bottom: 0.5rem;">✅ SPHINCS+ Wallet Generated!</div>
+              <div class="form-group">
+                <label class="form-label">Derived Native Address</label>
+                <div class="badge-mono" id="created-native-address" style="word-break: break-all; font-size: 0.72rem;">-</div>
+              </div>
+              <div class="form-group" style="margin-top: 0.4rem;">
+                <label class="form-label">Derived EVM Address</label>
+                <div class="badge-mono" id="created-evm-address" style="word-break: break-all; font-size: 0.72rem;">-</div>
+              </div>
+              <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+                <button class="btn btn-primary btn-block" id="btn-download-wallet-json" onclick="downloadCreatedWallet()">📥 Download wallet.json</button>
+                <button class="btn btn-secondary btn-block" id="btn-use-created-wallet" onclick="useCreatedWalletAsActive()">Use as Active</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- IMPORT / UNLOCK WALLET -->
+          <div class="card" id="card-unlock-wallet">
+            <div class="card-header">
+              <span class="card-title">🔓 Import / Unlock Wallet File</span>
+            </div>
+            <p>Load an existing encrypted <code>wallet.json</code> created via CLI (<code>cli.py wallet create</code>) or Web Console to activate credentials.</p>
+            <form id="form-unlock-wallet" onsubmit="handleUnlockWallet(event)">
+              <div style="display: flex; flex-direction: column; gap: 0.85rem;">
+                <div class="form-group">
+                  <label class="form-label" for="import-wallet-file">Select wallet.json File</label>
+                  <input type="file" class="form-input" id="import-wallet-file" accept=".json" onchange="handleWalletFileSelect(event)">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="import-wallet-passphrase">Wallet Passphrase</label>
+                  <input type="password" class="form-input" id="import-wallet-passphrase" placeholder="Passphrase to decrypt..." required autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn btn-secondary btn-block" id="btn-submit-unlock-wallet">Decrypt & Load Active Wallet</button>
+
+                <!-- Advanced Paste Raw JSON -->
+                <details class="advanced-details">
+                  <summary class="advanced-summary">⚙️ Advanced: Paste Raw Wallet JSON Text</summary>
+                  <div class="advanced-content" style="padding: 0.75rem;">
+                    <textarea class="form-input mono" id="import-wallet-json-text" rows="3" placeholder='{"sign_public_key": "...", "kdf": "bcrypt", ...}'></textarea>
+                  </div>
+                </details>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Transfer & Faucet Form -->
+        <div class="grid-2">
+          <!-- Send PVO -->
+          <div class="card" id="card-wallet-send">
+            <div class="card-header">
+              <span class="card-title">Send Native PVO Transaction</span>
+            </div>
+            <form id="form-send-tx" onsubmit="handleSendTransaction(event)">
+              <div style="display: flex; flex-direction: column; gap: 0.85rem;">
+                <div class="form-group">
+                  <label class="form-label" for="tx-recipient">Recipient Address (Native pvo1... or 0x...)</label>
+                  <input type="text" class="form-input mono" id="tx-recipient" placeholder="pvo1..." required>
+                </div>
+                <div class="grid-2">
+                  <div class="form-group">
+                    <label class="form-label" for="tx-amount">Amount (PVO)</label>
+                    <input type="number" step="0.00000001" min="0.00000001" class="form-input mono" id="tx-amount" placeholder="1.00000000" required>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="tx-fee">Fee (Min 0.0001 PVO)</label>
+                    <input type="number" step="0.0001" min="0.0001" class="form-input mono" id="tx-fee" value="0.00010000" required>
+                  </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block" id="btn-submit-tx">Sign & Broadcast Transaction</button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Devnet Faucet -->
+          <div class="card" id="card-wallet-faucet">
+            <div class="card-header">
+              <span class="card-title">Devnet Test Faucet</span>
+            </div>
+            <p>Request instant testnet PVO tokens to the current wallet for testing L2 smart contracts and L3 PVO-Fi protocols.</p>
+            <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: auto;">
+              <button class="btn btn-secondary btn-block" id="btn-claim-faucet" onclick="claimTestFaucet(10)">Claim +10.00000000 PVO</button>
+              <button class="btn btn-secondary btn-block" id="btn-claim-faucet-50" onclick="claimTestFaucet(50)">Claim +50.00000000 PVO</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Transaction History -->
+        <div class="card" id="card-tx-history">
+          <div class="card-header">
+            <span class="card-title">Transaction Ledger</span>
+          </div>
+          <div class="table-wrapper">
+            <table class="data-table" id="table-tx-history">
+              <thead>
+                <tr>
+                  <th>Tx ID / Hash</th>
+                  <th>Type</th>
+                  <th>Recipient / Contract</th>
+                  <th>Amount</th>
+                  <th>Fee</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-tx-history">
+                <!-- Populated dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- =========================================================================
+         TAB 3: CURRENT NODE MINER & CONSENSUS ENGINE
+         ========================================================================= -->
+    <section class="tab-pane" id="tab-miner" role="tabpanel">
+      <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+
+        <!-- Live Node Miner Controller Card -->
+        <div class="card" id="miner-control-card">
+          <div class="card-header">
+            <div>
+              <span class="card-title">Pacvo Native Node Miner & Consensus Engine</span>
+              <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">
+                Connected to Node RPC at <code class="mono" id="miner-rpc-endpoint">127.0.0.1:9442</code>
+              </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <span class="badge-mono chip-success" id="miner-node-status-badge">● NODE ONLINE</span>
+              <span class="badge-mono chip-warning" id="miner-engine-badge">MINING ACTIVE</span>
+            </div>
+          </div>
+
+          <p>Real-time telemetry and consensus execution on the live running Pacvo Full Node. Mines canonical SHA-512 blocks, executes mempool transactions, and enforces the 128-block coinbase maturity lockup invariant.</p>
+
+          <!-- Primary Telemetry Grid -->
+          <div class="grid-3" style="margin-top: 0.5rem;">
+            <div class="stat-tile">
+              <span class="stat-label">Blockchain Tip Height</span>
+              <span class="stat-value" id="miner-node-height">#0</span>
+              <span class="stat-subtext">Status: <span style="color: var(--status-success);">Active Chain</span></span>
+            </div>
+            <div class="stat-tile">
+              <span class="stat-label">Miner Total Earned</span>
+              <span class="stat-value" id="miner-node-rewards" style="color: var(--status-success);">0.00 PVO</span>
+              <span class="stat-subtext">Spendable: <span id="miner-node-spendable">0.00</span> | Staked: <span id="miner-node-staked">0.00</span></span>
+            </div>
+            <div class="stat-tile">
+              <span class="stat-label">Spendable Balance</span>
+              <span class="stat-value" id="miner-unlocked-total" style="color: var(--status-success);">0.00 PVO</span>
+              <span class="stat-subtext">Locked: <span id="miner-pending-locked" style="color: var(--status-warning);">0.00 PVO</span></span>
+            </div>
+          </div>
+
+          <!-- Controls & Address -->
+          <div class="grid-3" style="align-items: flex-end; margin-top: 0.75rem;">
+            <div class="form-group" style="grid-column: span 2;">
+              <label class="form-label">Current Node Miner Payout Address (from wallet.json)</label>
+              <div class="badge-mono" id="miner-node-address" style="padding: 0.5rem; word-break: break-all; font-size: 0.75rem;">pvo1...</div>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+              <button class="btn btn-primary btn-block" id="btn-mine-node-block" onclick="mineBlockOnNode()">⚡ Mine 1 Block on Node</button>
+              <button class="btn btn-secondary" id="btn-refresh-node-status" onclick="fetchNodeMinerStatus()" title="Refresh Node State">🔄</button>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-muted);">
+            <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer;">
+              <input type="checkbox" id="miner-auto-poll-chk" checked onchange="toggleMinerAutoPoll(event)"> Auto-sync node telemetry (every 3s)
+            </label>
+            <span id="miner-last-sync-time">Last synced: Just now</span>
+          </div>
+
+          <!-- Advanced Consensus Diagnostics & Lockup Engine -->
+          <details class="advanced-details" style="margin-top: 1rem;">
+            <summary class="advanced-summary">⚙️ Advanced Consensus Diagnostics & 128-Block Lockup Engine</summary>
+            <div class="advanced-content">
+              <div class="grid-3">
+                <div class="stat-tile">
+                  <span class="stat-label">PoW Target Difficulty</span>
+                  <span class="stat-value" id="miner-node-target" style="font-size: 0.85rem; word-break: break-all;">3fffffff...</span>
+                  <span class="stat-subtext">Cumulative Work: <span id="miner-node-work">0</span></span>
+                </div>
+                <div class="stat-tile">
+                  <span class="stat-label">Tip Hash</span>
+                  <span class="stat-value mono" id="miner-tip-hash-preview" style="font-size: 0.85rem; word-break: break-all;">29ac79c6...</span>
+                  <span class="stat-subtext">SHA-512 Consensus</span>
+                </div>
+                <div class="stat-tile">
+                  <span class="stat-label">Mempool & Network</span>
+                  <span class="stat-value" id="miner-node-mempool">0 Txs</span>
+                  <span class="stat-subtext">Connected Peers: <span id="miner-node-peers">0</span></span>
+                </div>
+              </div>
+
+              <!-- 128-Block Coinbase Lockup Table -->
+              <div style="margin-top: 0.5rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                  <strong style="font-size: 0.9rem;">⏳ 128-Block Coinbase Lockup Tracker</strong>
+                  <span style="font-size: 0.75rem; color: var(--text-muted);">50% coinbase locked for 128 blocks</span>
+                </div>
+                <div class="table-wrapper">
+                  <table class="data-table" id="table-locked-rewards">
+                    <thead>
+                      <tr>
+                        <th>Locked Amount</th>
+                        <th>Unlocks At</th>
+                        <th>Remaining</th>
+                        <th>Progress</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbody-locked-rewards">
+                      <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:1.5rem">No locked coinbase entries on node — mine blocks to generate rewards.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <!-- Blockchain Ledger: Recent Blocks on Node -->
+        <div class="card" id="card-node-recent-blocks">
+          <div class="card-header">
+            <span class="card-title">Blockchain Ledger &mdash; Recent Blocks on Node</span>
+          </div>
+          <div class="table-wrapper">
+            <table class="data-table" id="table-node-blocks">
+              <thead>
+                <tr>
+                  <th>Height</th>
+                  <th>Block Hash</th>
+                  <th>Nonce</th>
+                  <th>Transactions</th>
+                  <th>Timestamp</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-node-blocks">
+                <!-- Dynamically populated from node RPC -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- =========================================================================
+         TAB 4: LAYER 2 STUDIO (TOKENS & NFTS)
+         ========================================================================= -->
+    <section class="tab-pane" id="tab-l2" role="tabpanel">
+      <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+
+        <!-- Subtab Switcher -->
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.75rem;">
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="btn btn-primary" id="btn-subtab-erc20" onclick="switchL2Subtab('erc20')">ERC-20 Fungible Tokens</button>
+            <button class="btn btn-secondary" id="btn-subtab-nft" onclick="switchL2Subtab('nft')">ERC-721 Non-Fungible Tokens (NFTs)</button>
+          </div>
+          <span class="badge-mono" id="l2-contract-vm-badge">Shanghai Reference EVM</span>
+        </div>
+
+        <!-- SUBSECTION 1: ERC-20 TOKENS -->
+        <div id="l2-section-erc20" style="display: flex; flex-direction: column; gap: 1.25rem;">
+          
+          <!-- Token Deployer Grid -->
+          <div class="grid-2">
+            <!-- Deploy Token Form -->
+            <div class="card" id="card-deploy-token">
+              <div class="card-header">
+                <span class="card-title">Deploy New ERC-20 Token</span>
+              </div>
+              <form id="form-deploy-token" onsubmit="handleDeployToken(event)">
+                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                  <div class="grid-2">
+                    <div class="form-group">
+                      <label class="form-label" for="token-name">Token Name</label>
+                      <input type="text" class="form-input" id="token-name" placeholder="Pacvo USD" required>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label" for="token-symbol">Symbol</label>
+                      <input type="text" class="form-input" id="token-symbol" placeholder="PUSD" required>
+                    </div>
+                  </div>
+                  <div class="grid-2">
+                    <div class="form-group">
+                      <label class="form-label" for="token-type">Token Architecture</label>
+                      <select class="form-select" id="token-type">
+                        <option value="fixed">Fixed Supply (Deployer initial mint)</option>
+                        <option value="controlled">Controlled Mint & Burn (Role-based)</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label" for="token-supply">Initial Supply</label>
+                      <input type="number" class="form-input mono" id="token-supply" placeholder="1000000" required>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="token-salt">CREATE2 Deterministic Salt (Optional)</label>
+                    <input type="text" class="form-input mono" id="token-salt" placeholder="0x0000... (auto-generated if blank)">
+                  </div>
+                  <button type="submit" class="btn btn-primary btn-block" id="btn-deploy-token">Deploy Token to Layer 2</button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Token Management & Transfer Form -->
+            <div class="card" id="card-transfer-token">
+              <div class="card-header">
+                <span class="card-title">Token Operations (Transfer / Mint / Burn)</span>
+              </div>
+              <form id="form-token-ops" onsubmit="handleTokenOperation(event)">
+                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                  <div class="form-group">
+                    <label class="form-label" for="token-select-op">Select Token</label>
+                    <select class="form-select" id="token-select-op" onchange="handleTokenSelectionChange(event)">
+                      <!-- Dynamically populated -->
+                    </select>
+                  </div>
+                  <div class="grid-2">
+                    <div class="form-group">
+                      <label class="form-label" for="token-op-type">Operation</label>
+                      <select class="form-select" id="token-op-type">
+                        <option value="transfer">Transfer</option>
+                        <option value="mint">Mint (Minter only)</option>
+                        <option value="burn">Burn</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label" for="token-op-amount">Amount</label>
+                      <input type="number" step="0.0001" class="form-input mono" id="token-op-amount" placeholder="100" required>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="token-op-recipient">Recipient / Target Address</label>
+                    <input type="text" class="form-input mono" id="token-op-recipient" placeholder="0x...">
+                  </div>
+                  <button type="submit" class="btn btn-primary btn-block" id="btn-exec-token-op">Execute Token Operation</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- Tokens List -->
+          <div class="card" id="card-tokens-list">
+            <div class="card-header">
+              <span class="card-title">Deployed ERC-20 Tokens Registry</span>
+            </div>
+            <div class="table-wrapper">
+              <table class="data-table" id="table-tokens-list">
+                <thead>
+                  <tr>
+                    <th>Symbol</th>
+                    <th>Name</th>
+                    <th>Contract Address</th>
+                    <th>Total Supply</th>
+                    <th>My Balance</th>
+                    <th>Type</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-tokens-list">
+                  <!-- Dynamically populated -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- SUBSECTION 2: ERC-721 NFTS -->
+        <div id="l2-section-nft" style="display: none; flex-direction: column; gap: 1.25rem;">
+          
+          <!-- NFT Deployer & Minting Grid -->
+          <div class="grid-2">
+            <!-- Deploy Collection -->
+            <div class="card" id="card-deploy-nft-col">
+              <div class="card-header">
+                <span class="card-title">Deploy ERC-721 NFT Collection</span>
+              </div>
+              <form id="form-deploy-nft-col" onsubmit="handleDeployNFTCollection(event)">
+                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                  <div class="form-group">
+                    <label class="form-label" for="nft-col-name">Collection Name</label>
+                    <input type="text" class="form-input" id="nft-col-name" placeholder="Pacvo Genesis Artifacts" required>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="nft-col-symbol">Symbol</label>
+                    <input type="text" class="form-input" id="nft-col-symbol" placeholder="PVONFT" required>
+                  </div>
+                  <button type="submit" class="btn btn-primary btn-block" id="btn-deploy-nft-col">Deploy NFT Contract</button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Mint Single NFT -->
+            <div class="card" id="card-mint-nft">
+              <div class="card-header">
+                <span class="card-title">Mint NFT to Collection</span>
+              </div>
+              <form id="form-mint-nft" onsubmit="handleMintNFT(event)">
+                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                  <div class="grid-2">
+                    <div class="form-group">
+                      <label class="form-label" for="nft-mint-col-select">Collection</label>
+                      <select class="form-select" id="nft-mint-col-select">
+                        <!-- Populated -->
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label" for="nft-mint-id">Token ID</label>
+                      <input type="number" min="1" class="form-input mono" id="nft-mint-id" placeholder="1" required>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="nft-mint-recipient">Recipient EVM Address</label>
+                    <input type="text" class="form-input mono" id="nft-mint-recipient" placeholder="0x..." required>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="nft-mint-uri">Metadata Name / Description</label>
+                    <input type="text" class="form-input" id="nft-mint-uri" placeholder="Artifact #001 — SPHINCS+ Master Node">
+                  </div>
+                  <button type="submit" class="btn btn-primary btn-block" id="btn-mint-nft">Mint NFT</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- NFT Gallery Grid -->
+          <div class="card" id="card-nft-gallery">
+            <div class="card-header">
+              <span class="card-title">Minted NFT Gallery & Inspector</span>
+              <span class="card-badge badge-mono" id="nft-total-badge">Total: 0</span>
+            </div>
+            <div class="nft-grid" id="nft-gallery-grid">
+              <!-- Dynamically populated NFT cards -->
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- =========================================================================
+         TAB 5: LAYER 3 PVO-FI FINANCIAL ECONOMY
+         ========================================================================= -->
+    <section class="tab-pane" id="tab-l3" role="tabpanel">
+      <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+
+        <!-- L3 Navigation Subtabs -->
+        <div style="display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.75rem; overflow-x: auto;">
+          <button class="btn btn-primary" id="btn-subtab-amm" onclick="switchL3Subtab('amm')">AMM DEX</button>
+          <button class="btn btn-secondary" id="btn-subtab-lending" onclick="switchL3Subtab('lending')">Lending & Liquidation</button>
+        </div>
+
+        <!-- 1. AMM DEX SUBSECTION -->
+        <div id="l3-section-amm" style="display: flex; flex-direction: column; gap: 1.25rem;">
+          <div class="grid-2">
+            <!-- Swap Form -->
+            <div class="card" id="card-amm-swap">
+              <div class="card-header">
+                <span class="card-title">Constant-Product AMM Swap</span>
+                <span class="card-badge badge-mono">30 bps LP Fee (100% Retained)</span>
+              </div>
+              <form id="form-amm-swap" onsubmit="handleAmmSwap(event)">
+                <div style="display: flex; flex-direction: column; gap: 0.85rem;">
+                  <div class="grid-2">
+                    <div class="form-group">
+                      <label class="form-label" for="swap-token-in">Sell Token</label>
+                      <select class="form-select" id="swap-token-in" onchange="updateSwapQuote()">
+                        <option value="POL">POL (Polygon Reserve)</option>
+                        <option value="PVOA">PVOA (Pacvo Asset)</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label" for="swap-amount-in">Amount In</label>
+                      <input type="number" step="0.0001" class="form-input mono" id="swap-amount-in" placeholder="10.0" required oninput="updateSwapQuote()">
+                    </div>
+                  </div>
+
+                  <div class="grid-2">
+                    <div class="form-group">
+                      <label class="form-label" for="swap-token-out">Buy Token</label>
+                      <select class="form-select" id="swap-token-out" onchange="updateSwapQuote()">
+                        <option value="PVOA">PVOA (Pacvo Asset)</option>
+                        <option value="POL">POL (Polygon Reserve)</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Estimated Output (Net of 0.30% Fee)</label>
+                      <div class="badge-mono" id="swap-quote-output" style="padding: 0.6rem;">0.0000</div>
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label" for="swap-slippage">Max Slippage Tolerance (%)</label>
+                    <input type="number" step="0.1" min="0.1" max="50" class="form-input mono" id="swap-slippage" value="1.0">
+                  </div>
+
+                  <button type="submit" class="btn btn-primary btn-block" id="btn-exec-swap">Execute Swap</button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Pool Reserves Card -->
+            <div class="card" id="card-amm-pool">
+              <div class="card-header">
+                <span class="card-title">AMM Pool Reserves & Invariant</span>
+              </div>
+              <div class="grid-2">
+                <div class="stat-tile">
+                  <span class="stat-label">POL Reserve (x)</span>
+                  <span class="stat-value" id="pool-reserve-pol">10,000.0000</span>
+                </div>
+                <div class="stat-tile">
+                  <span class="stat-label">PVOA Reserve (y)</span>
+                  <span class="stat-value" id="pool-reserve-pvoa">10,000.0000</span>
+                </div>
+              </div>
+              <div class="stat-tile">
+                <span class="stat-label">Constant-Product Invariant k = x &middot; y</span>
+                <span class="stat-value" id="pool-invariant-k" style="font-size: 1.1rem;">100,000,000.00</span>
+                <span class="stat-subtext">Monotonically increases on each swap via 100% LP fee retention</span>
+              </div>
+              <div class="stat-tile">
+                <span class="stat-label">Spot Price</span>
+                <span class="stat-value" id="pool-spot-price">1.0000 PVOA / POL</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. LENDING SUBSECTION -->
+        <div id="l3-section-lending" style="display: none; flex-direction: column; gap: 1.25rem;">
+          <div class="card" id="card-lending-ops">
+            <div class="card-header">
+              <span class="card-title">Collateralized Debt Position</span>
+            </div>
+            <form id="form-lending-pos" onsubmit="handleCreatePosition(event)">
+              <div style="display: flex; flex-direction: column; gap: 0.85rem;">
+                <div class="grid-2">
+                  <div class="form-group">
+                    <label class="form-label" for="lend-collat-amount">Deposit Collateral (COLLAT Tokens)</label>
+                    <input type="number" class="form-input mono" id="lend-collat-amount" value="10000" required>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="lend-debt-amount">Borrow POL Debt</label>
+                    <input type="number" class="form-input mono" id="lend-debt-amount" value="5000" required>
+                  </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Open / Update Position</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Advanced Financial Substrates Collapsible -->
+        <details class="advanced-details">
+          <summary class="advanced-summary">⚙️ Advanced Financial Instruments (Equities, Basket Funds & Bridges)</summary>
+          <div class="advanced-content">
+            <!-- 1. EQUITIES & DIVIDENDS -->
+            <div class="card" id="card-equity-dividends" style="border: none; background: transparent; padding: 0;">
+              <div class="card-header" style="padding-top: 0;">
+                <span class="card-title">Tokenized Equities & O(1) Scalable Dividend Pool</span>
+              </div>
+              <p>Declare global corporate dividends across all shareholders in O(1) time using cumulative-per-share accounting indices.</p>
+
+              <div class="grid-3" style="margin-top: 0.5rem;">
+                <div class="stat-tile">
+                  <span class="stat-label">Equity Symbol</span>
+                  <span class="stat-value">EQPOCH</span>
+                  <span class="stat-subtext">Total Supply: 10,000 Shares</span>
+                </div>
+                <div class="stat-tile">
+                  <span class="stat-label">My Share Balance</span>
+                  <span class="stat-value">5,000 (50%)</span>
+                </div>
+                <div class="stat-tile">
+                  <span class="stat-label">Claimable Dividends</span>
+                  <span class="stat-value" id="equity-claimable-val" style="color: var(--status-success);">0.0000 POL</span>
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 0.75rem; margin-top: 0.5rem; flex-wrap: wrap;">
+                <button class="btn btn-primary" onclick="declareEquityDividend(1000)">Declare $1,000 Dividend Payout</button>
+                <button class="btn btn-success" id="btn-claim-div" onclick="claimEquityDividend()">Claim Dividend</button>
+              </div>
+            </div>
+
+            <!-- 2. BASKET FUNDS -->
+            <div class="card" id="card-basket-nav" style="border: none; background: transparent; padding: 0; margin-top: 1rem;">
+              <div class="card-header" style="padding-top: 0;">
+                <span class="card-title">Tokenized Basket Portfolio & Continuous NAV</span>
+              </div>
+              <div class="grid-3">
+                <div class="stat-tile">
+                  <span class="stat-label">Fund Symbol</span>
+                  <span class="stat-value">PBASK</span>
+                  <span class="stat-subtext">Composition: 50% PVOA / 50% POL</span>
+                </div>
+                <div class="stat-tile">
+                  <span class="stat-label">Net Asset Value (NAV)</span>
+                  <span class="stat-value" id="basket-nav-val">$1.0000</span>
+                  <span class="stat-subtext">Dynamic pricing oracle</span>
+                </div>
+                <div class="stat-tile">
+                  <span class="stat-label">Fund Total Supply</span>
+                  <span class="stat-value" id="basket-supply-val">100,000 Shares</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. CROSS-CHAIN BRIDGES -->
+            <div style="margin-top: 1rem;">
+              <div class="card-header" style="padding-top: 0; margin-bottom: 0.5rem;">
+                <span class="card-title">Cross-Chain Wrapped Bridges</span>
+              </div>
+              <div class="grid-3">
+                <!-- Bitcoin Bridge -->
+                <div class="card" id="card-bridge-btc">
+                  <div class="card-header">
+                    <span class="card-title">Bitcoin (wPVO-BTC)</span>
+                    <span class="badge-mono chip-success">8d &rarr; 18 WAD</span>
+                  </div>
+                  <div class="stat-tile">
+                    <span class="stat-label">Total Locked BTC</span>
+                    <span class="stat-value" id="bridge-btc-locked">1.00000000 BTC</span>
+                    <span class="stat-subtext">Minted: <span id="bridge-btc-minted">0.9985 WAD</span></span>
+                  </div>
+                  <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                    <button class="btn btn-secondary" style="flex:1;font-size:0.75rem;" onclick="simulateBridgeDeposit('BTC', 100000000)">Deposit 1 BTC</button>
+                    <button class="btn btn-secondary" style="flex:1;font-size:0.75rem;" onclick="simulateBridgeBurn('BTC', 0.5)">Burn 0.5</button>
+                  </div>
+                </div>
+
+                <!-- Nano Bridge -->
+                <div class="card" id="card-bridge-xno">
+                  <div class="card-header">
+                    <span class="card-title">Nano (wPVO-XNO)</span>
+                    <span class="badge-mono chip-success">30r &rarr; 18 WAD</span>
+                  </div>
+                  <div class="stat-tile">
+                    <span class="stat-label">Total Locked XNO</span>
+                    <span class="stat-value" id="bridge-xno-locked">100.0000 XNO</span>
+                    <span class="stat-subtext">Minted: <span id="bridge-xno-minted">99.9000 WAD</span></span>
+                  </div>
+                  <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                    <button class="btn btn-secondary" style="flex:1;font-size:0.75rem;" onclick="simulateBridgeDeposit('XNO', 100)">Deposit 100</button>
+                    <button class="btn btn-secondary" style="flex:1;font-size:0.75rem;" onclick="simulateBridgeBurn('XNO', 50)">Burn 50</button>
+                  </div>
+                </div>
+
+                <!-- Chocohub Bridge -->
+                <div class="card" id="card-bridge-cc">
+                  <div class="card-header">
+                    <span class="card-title">Chocohub (wCCPVO)</span>
+                    <span class="badge-mono chip-success">8d &rarr; 18 WAD</span>
+                  </div>
+                  <div class="stat-tile">
+                    <span class="stat-label">Total Locked CC</span>
+                    <span class="stat-value" id="bridge-cc-locked">1000.0000 CC</span>
+                    <span class="stat-subtext">Minted: <span id="bridge-cc-minted">999.0000 WAD</span></span>
+                  </div>
+                  <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                    <button class="btn btn-secondary" style="flex:1;font-size:0.75rem;" onclick="simulateBridgeDeposit('CC', 100000000000)">Deposit 1k CC</button>
+                    <button class="btn btn-secondary" style="flex:1;font-size:0.75rem;" onclick="simulateBridgeBurn('CC', 500)">Burn 500</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </details>
+
+      </div>
+    </section>
+
+    <!-- =========================================================================
+         TAB 6: HTLC & CHOCOHUB (CC) ATOMIC SWAP
+         ========================================================================= -->
+    <section class="tab-pane" id="tab-htlc" role="tabpanel">
+      <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+        
+        <!-- Hero Banner -->
+        <div class="card" id="htlc-hero-card" style="background: linear-gradient(180deg, var(--bg-surface-raised) 0%, var(--bg-surface) 100%);">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div>
+              <h2 style="margin-bottom: 0;">Hashed Time-Locked Contract (HTLC) Atomic Swap</h2>
+            </div>
+            <div>
+              <span class="badge badge-success" style="font-size: 0.85rem; padding: 0.4rem 0.8rem;">Rate: 1 PVO = 10 CC</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- HTLC Creation Row -->
+        <div class="grid-2">
+          <!-- Create HTLC Order -->
+          <div class="card" id="card-create-htlc">
+            <div class="card-header">
+              <span class="card-title">Lock HTLC Swap (1 PVO &rarr; 10 CC)</span>
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label" for="htlc-init-pacvo">Initiator Pacvo Address</label>
+              <input type="text" class="form-input mono" id="htlc-init-pacvo" placeholder="0x..." readonly>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="htlc-part-choco">Counterparty Chocohub Username / Wallet</label>
+              <input type="text" class="form-input" id="htlc-part-choco" placeholder="pacvo15_476_wccpvo" value="pacvo15_476_wccpvo">
+            </div>
+
+            <div class="grid-2">
+              <div class="form-group">
+                <label class="form-label" for="htlc-amount-pvo">PVO Amount to Swap</label>
+                <input type="number" class="form-input mono" id="htlc-amount-pvo" value="1.0" min="0.01" step="0.1" oninput="updateHtlcCcCalculation(event)">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Calculated Output CC (10x)</label>
+                <input type="text" class="form-input mono" id="htlc-amount-cc-preview" value="10.0000 CC" readonly style="background: var(--bg-base); color: var(--status-success); font-weight: 600;">
+              </div>
+            </div>
+
+            <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem; margin: 0.5rem 0;">
+              <input type="checkbox" id="htlc-auto-mine-checkbox" checked>
+              <label for="htlc-auto-mine-checkbox" class="form-label" style="margin-bottom: 0; cursor: pointer;">
+                <strong>Mine 10 CC per 1 PVO on Swap</strong> (CCpow Proof-of-Work)
+              </label>
+            </div>
+
+            <button class="btn btn-primary" id="btn-lock-htlc" onclick="executeCreateHtlcOrder()" style="width: 100%;">Lock & Execute HTLC Swap</button>
+
+            <!-- Advanced Cryptographic Secret & Hashlock -->
+            <details class="advanced-details" style="margin-top: 1rem;">
+              <summary class="advanced-summary">⚙️ Advanced Cryptographic Proofs (Secret S & Hashlock H)</summary>
+              <div class="advanced-content">
+                <div class="form-group">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                    <label class="form-label" style="margin-bottom: 0;">Secret Pre-Image (S)</label>
+                    <button class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="generateNewHtlcSecret()">Generate Secret</button>
+                  </div>
+                  <input type="text" class="form-input mono" id="htlc-secret-input" placeholder="Random 32-byte hex secret" readonly>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">SHA-256 Hashlock (H = SHA256(S))</label>
+                  <input type="text" class="form-input mono" id="htlc-hashlock-input" placeholder="64-char SHA-256 hex" readonly>
+                </div>
+              </div>
+            </details>
+          </div>
+
+          <!-- Advanced: CCpow Solver & Multipliers -->
+          <div class="card" id="card-mine-htlc" style="height: fit-content;">
+            <div class="card-header">
+              <div>
+                <span class="card-title">Chocohub CCpow Miner (MPG_Miner.py)</span>
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">
+                  Worker: <code class="mono" id="htlc-worker-label">pacvo15_476_wccpvo</code> &bull; Server: <code class="mono">chocohub-r011.onrender.com</code>
+                </div>
+              </div>
+              <span class="badge badge-primary" id="htlc-miner-status-badge">Idle</span>
+            </div>
+
+            <div class="grid-2" style="margin-bottom: 0.75rem;">
+              <div class="stat-tile">
+                <span class="stat-label">CCpow Hashrate</span>
+                <span class="stat-value" id="htlc-miner-hashrate">0 H/s</span>
+              </div>
+              <div class="stat-tile">
+                <span class="stat-label">Proofs Solved</span>
+                <span class="stat-value" id="htlc-miner-proofs" style="color: var(--status-success);">0</span>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
+              <button class="btn btn-primary" id="btn-start-htlc-miner" onclick="toggleHtlcMining()" style="flex: 1;">Start CCpow Miner</button>
+              <button class="btn btn-secondary" onclick="simulateSingleHtlcProof()">Mine 1 Proof</button>
+            </div>
+
+            <!-- Advanced Multipliers & Target -->
+            <details class="advanced-details">
+              <summary class="advanced-summary">⚙️ Advanced Hardware Multipliers & Targets</summary>
+              <div class="advanced-content">
+                <div class="form-group">
+                  <label class="form-label" for="htlc-device-multiplier-select">Device Hardware Tier / Multiplier</label>
+                  <select class="form-select" id="htlc-device-multiplier-select" onchange="handleHtlcDeviceChange(event)">
+                    <option value="cpu" selected>Desktop CPU / Web Miner (3.0x Multiplier)</option>
+                    <option value="embedded_avr">Arduino / AVR Microcontroller (3.5x Multiplier)</option>
+                    <option value="embedded_arm">Raspberry Pi Pico / RP2040 (3.5x Multiplier)</option>
+                    <option value="embedded_esp">ESP8266 / NodeMCU (2.5x / 3.0x Multiplier)</option>
+                    <option value="embedded_esp32">ESP32 / ESP-C3 (2.0x / 3.0x Multiplier)</option>
+                    <option value="mobile">Mobile Browser (3.6x Multiplier)</option>
+                    <option value="gpu">Dedicated GPU (2.0x Multiplier)</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="htlc-target-order-select">Target HTLC Swap Order</label>
+                  <select class="form-select mono" id="htlc-target-order-select">
+                    <option value="auto">Auto (Mine on Next Active Swap)</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Latest Solved CCpow Hash</label>
+                  <input type="text" class="form-input mono" id="htlc-miner-last-hash" placeholder="No proof solved yet" readonly>
+                </div>
+              </div>
+            </details>
+          </div>
+        </div>
+
+        <!-- Active HTLC Orders Table -->
+        <div class="card" id="card-htlc-orders">
+          <div class="card-header">
+            <span class="card-title">HTLC Swap Contracts Ledger</span>
+            <button class="btn btn-secondary" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" onclick="renderHtlcOrdersTable()">Refresh Ledger</button>
+          </div>
+
+          <div style="overflow-x: auto;">
+            <table class="data-table" id="htlc-orders-table">
+              <thead>
+                <tr>
+                  <th>Order ID</th>
+                  <th>Amount (PVO)</th>
+                  <th>Amount (CC)</th>
+                  <th>Rate</th>
+                  <th>Hashlock (H)</th>
+                  <th>Timelock</th>
+                  <th>CCpow Proofs</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="htlc-orders-tbody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- =========================================================================
+         TAB 7: NODE / RPC SETTINGS
+         ========================================================================= -->
+    <section class="tab-pane" id="tab-node" role="tabpanel">
+      <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+        
+        <div class="card" id="card-node-config">
+          <div class="card-header">
+            <span class="card-title">Pacvo Node JSON-RPC Gateway</span>
+          </div>
+
+          <div class="grid-2">
+            <div class="form-group">
+              <label class="form-label" for="node-rpc-url">JSON-RPC Node URL</label>
+              <input type="text" class="form-input mono" id="node-rpc-url" value="http://127.0.0.1:9333">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="node-engine-mode">Execution Engine Mode</label>
+              <select class="form-select" id="node-engine-mode">
+                <option value="embedded">Integrated Pure-JS Multi-Layer Engine (Default)</option>
+                <option value="rpc">Direct Node JSON-RPC (http://127.0.0.1:9333)</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 0.75rem; margin-top: 0.5rem;">
+            <button class="btn btn-primary" onclick="testRpcConnection()">Test Connection</button>
+            <button class="btn btn-secondary" onclick="resetDemoState()">Reset State</button>
+          </div>
+        </div>
+
+        <!-- Raw RPC Tester -->
+        <div class="card" id="card-rpc-tester">
+          <div class="card-header">
+            <span class="card-title">Interactive JSON-RPC Request Console</span>
+          </div>
+          <div class="grid-2">
+            <div class="form-group">
+              <label class="form-label" for="rpc-method-select">RPC Method</label>
+              <select class="form-select mono" id="rpc-method-select" onchange="handleRpcMethodTemplateChange(event)">
+                <option value="get_balance">get_balance</option>
+                <option value="get_block">get_block</option>
+                <option value="get_tip">get_tip</option>
+                <option value="pacvo_l2_getToken">pacvo_l2_getToken</option>
+                <option value="pacvo_l2_getNFT">pacvo_l2_getNFT</option>
+                <option value="pacvo_l2_getNFTCollection">pacvo_l2_getNFTCollection</option>
+                <option value="pacvo_l3_getReserve">pacvo_l3_getReserve</option>
+                <option value="pacvo_l3_getMarket">pacvo_l3_getMarket</option>
+                <option value="pacvo_l3_getBridge">pacvo_l3_getBridge</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="rpc-params-input">Parameters (JSON Object)</label>
+              <input type="text" class="form-input mono" id="rpc-params-input" value='{"address": "pvo1..."}'>
+            </div>
+          </div>
+          <button class="btn btn-secondary" onclick="executeRpcQuery()">Send JSON-RPC Query</button>
+          <div class="form-group" style="margin-top: 0.5rem;">
+            <label class="form-label">Response JSON</label>
+            <textarea class="form-textarea mono" id="rpc-response-output" rows="6" readonly></textarea>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Scripts -->
+  <script src="crypto_util.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

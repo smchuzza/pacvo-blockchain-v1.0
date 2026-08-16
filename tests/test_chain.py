@@ -316,4 +316,133 @@ easy_pow = Block(1, "0" * 128, weak_block.merkle_root, cb.timestamp, MAX_TARGET,
 assert weak_block.meets_target() is False
 assert easy_pow.meets_target() is True
 
+# --- End-to-End EVM On-Chain Consensus Integration Test ---
+from pacvo.crypto import derive_create_address, derive_evm_address
+from pacvo.evm.opcodes import PUSH1, PUSH2, SSTORE, SLOAD, MSTORE, RETURN, STOP
+
+evm_chain = Blockchain()
+evm_chain.blocks[0] = Block(
+    0,
+    "0" * 128,
+    Block.compute_merkle_root([]),
+    GENESIS_TIMESTAMP,
+    MAX_TARGET,
+    0,
+    [],
+)
+evm_wallet = Wallet.generate()
+evm_miner = derive_address(evm_wallet.sign_public_key)
+evm_sender_evm = derive_evm_address(evm_wallet.sign_public_key)
+
+def mine_test_block(height, prev_hash, target, txs, timestamp):
+    b = make_block(height, prev_hash, target, 0, txs, timestamp)
+    while not b.meets_target():
+        b.nonce += 1
+    return b
+
+# Mine maturity blocks to unlock coinbase reward
+prev_blk = evm_chain.blocks[0]
+for h in range(1, COINBASE_MATURITY + 2):
+    cb_h = Transaction.coinbase(evm_miner, spendable, stake, h)
+    ts = GENESIS_TIMESTAMP + h * TARGET_BLOCK_TIME
+    b = mine_test_block(h, prev_blk.block_hash, evm_chain.next_target(), [cb_h], ts)
+    ok, err = evm_chain.add_block(b, sigs_ok=True)
+    assert ok, err
+    prev_blk = b
+
+assert evm_chain.state.spendable(evm_miner) >= spendable
+
+# Deploy contract: Stores 0xCAFE at slot 0 on construction, runtime code stores calldata at slot 1
+# Init code: PUSH2 0xCAFE, PUSH1 0, SSTORE, return runtime code
+# Runtime code: PUSH1 0, CALLDATALOAD, PUSH1 1, SSTORE, STOP
+runtime_bytes = bytes([PUSH1, 0, 0x35, PUSH1, 1, SSTORE, STOP]) # 0x35 is CALLDATALOAD
+header_prefix = bytes([
+    PUSH2, 0xCA, 0xFE,
+    PUSH1, 0,
+    SSTORE,
+    PUSH1, len(runtime_bytes), # length
+    PUSH1, 18,                  # code offset
+    PUSH1, 0,                  # mem destOffset
+    0x39,                      # CODECOPY
+    PUSH1, len(runtime_bytes), # length
+    PUSH1, 0,                  # mem offset
+    RETURN
+])
+init_bytes = header_prefix + runtime_bytes
+
+deploy_tx = Transaction(
+    sender_public_key=evm_wallet.sign_public_key,
+    recipient="",
+    amount=0,
+    fee=MIN_FEE,
+    nonce=evm_chain.state.next_nonce(evm_miner),
+    timestamp=int(time.time()),
+    evm_to="",
+    evm_data=init_bytes,
+    evm_gas_limit=1_000_000,
+    evm_value=0,
+)
+deploy_tx.sign(evm_wallet.sign_secret_key)
+
+# Mine block with deployment tx
+h_deploy = evm_chain.height + 1
+cb_deploy = Transaction.coinbase(evm_miner, spendable + deploy_tx.fee, stake, h_deploy)
+deploy_block = mine_test_block(
+    h_deploy,
+    evm_chain.blocks[-1].block_hash,
+    evm_chain.next_target(),
+    [cb_deploy, deploy_tx],
+    GENESIS_TIMESTAMP + h_deploy * TARGET_BLOCK_TIME,
+)
+ok, err = evm_chain.add_block(deploy_block)
+assert ok, err
+
+# Verify contract deployment
+expected_contract = derive_create_address(evm_sender_evm, 0)
+assert evm_chain.state.evm_state.get_code(expected_contract) == runtime_bytes
+assert evm_chain.state.evm_state.get_storage(expected_contract, 0) == 0xCAFE
+assert deploy_tx.txid in evm_chain.receipts
+assert evm_chain.receipts[deploy_tx.txid].status == 1
+assert evm_chain.receipts[deploy_tx.txid].contract_address == expected_contract
+
+# Now call the deployed contract with 0x1337 calldata
+call_data = (0x1337).to_bytes(32, "big")
+call_tx = Transaction(
+    sender_public_key=evm_wallet.sign_public_key,
+    recipient="",
+    amount=0,
+    fee=MIN_FEE,
+    nonce=evm_chain.state.next_nonce(evm_miner),
+    timestamp=int(time.time()),
+    evm_to=expected_contract,
+    evm_data=call_data,
+    evm_gas_limit=500_000,
+    evm_value=0,
+)
+call_tx.sign(evm_wallet.sign_secret_key)
+
+h_call = evm_chain.height + 1
+cb_call = Transaction.coinbase(evm_miner, spendable + call_tx.fee, stake, h_call)
+call_block = mine_test_block(
+    h_call,
+    evm_chain.blocks[-1].block_hash,
+    evm_chain.next_target(),
+    [cb_call, call_tx],
+    GENESIS_TIMESTAMP + h_call * TARGET_BLOCK_TIME,
+)
+ok, err = evm_chain.add_block(call_block)
+assert ok, err
+
+# Verify storage slot 1 was updated by the contract call
+assert evm_chain.state.evm_state.get_storage(expected_contract, 1) == 0x1337
+assert call_tx.txid in evm_chain.receipts
+assert evm_chain.receipts[call_tx.txid].status == 1
+
+# Verify that rebuilding state reconstructs exact EVM state
+rebuilt_state = evm_chain._rebuild_state(evm_chain.height)
+assert rebuilt_state.evm_state.get_code(expected_contract) == runtime_bytes
+assert rebuilt_state.evm_state.get_storage(expected_contract, 0) == 0xCAFE
+assert rebuilt_state.evm_state.get_storage(expected_contract, 1) == 0x1337
+
 print("test_chain: all assertions passed")
+

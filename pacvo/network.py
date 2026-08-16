@@ -38,6 +38,44 @@ _RESPONSE_FOR = {
     "get_balance": "balance",
     "get_headers": "headers",
     "get_blocks": "blocks",
+    "eth_chainId": "eth_chainId_response",
+    "eth_blockNumber": "eth_blockNumber_response",
+    "eth_getBalance": "eth_getBalance_response",
+    "eth_getCode": "eth_getCode_response",
+    "eth_getStorageAt": "eth_getStorageAt_response",
+    "eth_call": "eth_call_response",
+    "eth_estimateGas": "eth_estimateGas_response",
+    "eth_getTransactionReceipt": "eth_getTransactionReceipt_response",
+    "eth_getLogs": "eth_getLogs_response",
+    "pacvo_l2_getToken": "pacvo_l2_getToken_response",
+    "pacvo_l2_getTokenBalance": "pacvo_l2_getTokenBalance_response",
+    "pacvo_l2_getTokenAllowance": "pacvo_l2_getTokenAllowance_response",
+    "pacvo_l2_getAnchor": "pacvo_l2_getAnchor_response",
+    "pacvo_l2_getStateRoot": "pacvo_l2_getStateRoot_response",
+    "pacvo_l2_getNFT": "pacvo_l2_getNFT_response",
+    "pacvo_l2_getNFTCollection": "pacvo_l2_getNFTCollection_response",
+    "pacvo_l3_getAsset": "pacvo_l3_getAsset_response",
+    "pacvo_l3_getEquity": "pacvo_l3_getEquity_response",
+    "pacvo_l3_getBond": "pacvo_l3_getBond_response",
+    "pacvo_l3_getDebt": "pacvo_l3_getDebt_response",
+    "pacvo_l3_getFund": "pacvo_l3_getFund_response",
+    "pacvo_l3_getMarket": "pacvo_l3_getMarket_response",
+    "pacvo_l3_getPosition": "pacvo_l3_getPosition_response",
+    "pacvo_l3_getTreasury": "pacvo_l3_getTreasury_response",
+    "pacvo_l3_getReserve": "pacvo_l3_getReserve_response",
+    "pacvo_l3_getNAV": "pacvo_l3_getNAV_response",
+    "pacvo_l3_getPrice": "pacvo_l3_getPrice_response",
+    "pacvo_l3_getEpoch": "pacvo_l3_getEpoch_response",
+    "pacvo_l3_getStateRoot": "pacvo_l3_getStateRoot_response",
+    "pacvo_l3_getEconomy": "pacvo_l3_getEconomy_response",
+    "pacvo_l3_getAnchor": "pacvo_l3_getAnchor_response",
+    "pacvo_bridge_status": "pacvo_bridge_status_response",
+    "pacvo_bridge_getVault": "pacvo_bridge_getVault_response",
+    "pacvo_bridge_getBalance": "pacvo_bridge_getBalance_response",
+    "pacvo_bridge_deposit": "pacvo_bridge_deposit_response",
+    "pacvo_bridge_burn": "pacvo_bridge_burn_response",
+    "pacvo_getStatus": "pacvo_getStatus_response",
+    "pacvo_mineBlock": "pacvo_mineBlock_response",
 }
 
 
@@ -342,6 +380,130 @@ class P2PNode:
         elif msg_type == "get_balance":
             address = data.get("address", "")
             await peer.send("balance", self.node.get_balance(address))
+        elif msg_type == "eth_chainId":
+            await peer.send("eth_chainId_response", self.node.eth_chain_id())
+        elif msg_type == "eth_blockNumber":
+            await peer.send("eth_blockNumber_response", self.node.eth_block_number())
+        elif msg_type == "eth_getBalance":
+            address = data.get("address", "")
+            await peer.send("eth_getBalance_response", self.node.eth_get_balance(address))
+        elif msg_type == "eth_getCode":
+            address = data.get("address", "")
+            await peer.send("eth_getCode_response", self.node.eth_get_code(address))
+        elif msg_type == "eth_getStorageAt":
+            address = data.get("address", "")
+            position = int(data.get("position", 0))
+            await peer.send("eth_getStorageAt_response", self.node.eth_get_storage_at(address, position))
+        elif msg_type == "eth_call":
+            await peer.send("eth_call_response", self.node.eth_call(data))
+        elif msg_type == "eth_estimateGas":
+            await peer.send("eth_estimateGas_response", self.node.eth_estimate_gas(data))
+        elif msg_type == "eth_getTransactionReceipt":
+            tx_hash = data.get("tx_hash", "")
+            await peer.send("eth_getTransactionReceipt_response", self.node.eth_get_transaction_receipt(tx_hash))
+        elif msg_type == "eth_getLogs":
+            await peer.send("eth_getLogs_response", self.node.eth_get_logs(data))
+        elif msg_type == "pacvo_l2_getToken":
+            token_addr = data.get("token", "")
+            await peer.send("pacvo_l2_getToken_response", self.node.pacvo_l2_get_token(token_addr))
+        elif msg_type == "pacvo_l2_getTokenBalance":
+            token_addr = data.get("token", "")
+            owner_addr = data.get("address", "")
+            await peer.send("pacvo_l2_getTokenBalance_response", self.node.pacvo_l2_get_token_balance(token_addr, owner_addr))
+        elif msg_type == "pacvo_l2_getTokenAllowance":
+            token_addr = data.get("token", "")
+            owner_addr = data.get("owner", "")
+            spender_addr = data.get("spender", "")
+            await peer.send("pacvo_l2_getTokenAllowance_response", self.node.pacvo_l2_get_token_allowance(token_addr, owner_addr, spender_addr))
+        elif msg_type == "pacvo_l2_getAnchor":
+            await peer.send("pacvo_l2_getAnchor_response", self.node.pacvo_l2_get_anchor())
+        elif msg_type == "pacvo_l2_getStateRoot":
+            await peer.send("pacvo_l2_getStateRoot_response", self.node.pacvo_l2_get_state_root())
+        elif msg_type == "pacvo_l2_getNFT":
+            contract = data.get("contract", "")
+            token_id = int(data.get("token_id", 0))
+            await peer.send("pacvo_l2_getNFT_response", self.node.pacvo_l2_get_nft(contract, token_id))
+        elif msg_type == "pacvo_l2_getNFTCollection":
+            contract = data.get("contract", "")
+            await peer.send("pacvo_l2_getNFTCollection_response", self.node.pacvo_l2_get_nft_collection(contract))
+        elif msg_type == "pacvo_l3_getAsset":
+            symbol = data.get("symbol", data.get("asset_id", ""))
+            await peer.send("pacvo_l3_getAsset_response", self.node.pacvo_l3_get_asset(symbol))
+        elif msg_type == "pacvo_l3_getEquity":
+            symbol = data.get("symbol", "")
+            await peer.send("pacvo_l3_getEquity_response", self.node.pacvo_l3_get_equity(symbol))
+        elif msg_type == "pacvo_l3_getBond":
+            symbol = data.get("symbol", "")
+            await peer.send("pacvo_l3_getBond_response", self.node.pacvo_l3_get_bond(symbol))
+        elif msg_type == "pacvo_l3_getDebt":
+            borrower = data.get("borrower", "")
+            await peer.send("pacvo_l3_getDebt_response", self.node.pacvo_l3_get_debt(borrower))
+        elif msg_type == "pacvo_l3_getFund":
+            symbol = data.get("symbol", "")
+            await peer.send("pacvo_l3_getFund_response", self.node.pacvo_l3_get_fund(symbol))
+        elif msg_type == "pacvo_l3_getMarket":
+            t_a = data.get("token_a", data.get("tokenA", ""))
+            t_b = data.get("token_b", data.get("tokenB", ""))
+            await peer.send("pacvo_l3_getMarket_response", self.node.pacvo_l3_get_market(t_a, t_b))
+        elif msg_type == "pacvo_l3_getPosition":
+            owner = data.get("owner", "")
+            await peer.send("pacvo_l3_getPosition_response", self.node.pacvo_l3_get_position(owner))
+        elif msg_type == "pacvo_l3_getTreasury":
+            await peer.send("pacvo_l3_getTreasury_response", self.node.pacvo_l3_get_treasury())
+        elif msg_type == "pacvo_l3_getReserve":
+            await peer.send("pacvo_l3_getReserve_response", self.node.pacvo_l3_get_reserve())
+        elif msg_type == "pacvo_l3_getNAV":
+            symbol = data.get("symbol", "")
+            await peer.send("pacvo_l3_getNAV_response", self.node.pacvo_l3_get_nav(symbol))
+        elif msg_type == "pacvo_l3_getPrice":
+            symbol = data.get("symbol", "")
+            await peer.send("pacvo_l3_getPrice_response", self.node.pacvo_l3_get_price(symbol))
+        elif msg_type == "pacvo_l3_getEpoch":
+            await peer.send("pacvo_l3_getEpoch_response", self.node.pacvo_l3_get_epoch())
+        elif msg_type == "pacvo_l3_getStateRoot":
+            await peer.send("pacvo_l3_getStateRoot_response", self.node.pacvo_l3_get_state_root())
+        elif msg_type == "pacvo_l3_getEconomy":
+            await peer.send("pacvo_l3_getEconomy_response", self.node.pacvo_l3_get_economy())
+        elif msg_type == "pacvo_l3_getAnchor":
+            await peer.send("pacvo_l3_getAnchor_response", self.node.pacvo_l3_get_anchor())
+        elif msg_type == "pacvo_bridge_status":
+            await peer.send("pacvo_bridge_status_response", self.node.pacvo_bridge_status())
+        elif msg_type == "pacvo_bridge_getVault":
+            symbol = data.get("symbol", "")
+            await peer.send("pacvo_bridge_getVault_response", self.node.pacvo_bridge_get_vault(symbol))
+        elif msg_type == "pacvo_bridge_getBalance":
+            symbol = data.get("symbol", "")
+            user = data.get("user", "")
+            await peer.send("pacvo_bridge_getBalance_response", self.node.pacvo_bridge_get_balance(symbol, user))
+        elif msg_type == "pacvo_bridge_deposit":
+            symbol = data.get("symbol", "")
+            tx_h = data.get("external_tx_hash", "")
+            ext_from = data.get("external_from", "")
+            recip = data.get("pacvo_recipient", "")
+            raw_amt = int(data.get("raw_amount", 0))
+            await peer.send(
+                "pacvo_bridge_deposit_response",
+                self.node.pacvo_bridge_deposit(symbol, tx_h, ext_from, recip, raw_amt),
+            )
+        elif msg_type == "pacvo_bridge_burn":
+            symbol = data.get("symbol", "")
+            sender = data.get("pacvo_sender", "")
+            dest = data.get("external_destination", "")
+            amt_wad = int(data.get("amount_wad", 0))
+            await peer.send(
+                "pacvo_bridge_burn_response",
+                self.node.pacvo_bridge_burn(symbol, sender, dest, amt_wad),
+            )
+        elif msg_type == "pacvo_getStatus":
+            await peer.send(
+                "pacvo_getStatus_response",
+                self.node.pacvo_node_get_status(),
+            )
+        elif msg_type == "pacvo_mineBlock":
+            await peer.send(
+                "pacvo_mineBlock_response",
+                self.node.pacvo_node_mine_block(),
+            )
 
     async def _message_loop(self, peer: PeerConnection) -> None:
         try:

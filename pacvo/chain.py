@@ -5,10 +5,15 @@ import tempfile
 import time
 
 from pacvo.block import Block
-from pacvo.crypto import canonical_json, is_valid_address
+from pacvo.crypto import canonical_json, derive_create_address, is_valid_address, is_valid_evm_address
+from pacvo.evm.receipt import Receipt
+from pacvo.evm.state import EVMState
+from pacvo.evm.vm import EVM, ExecutionContext
 from pacvo.params import (
+    BLOCK_GAS_LIMIT,
     BLOCK_REWARD,
     COINBASE_MATURITY,
+    EVM_CHAIN_ID,
     GENESIS_TIMESTAMP,
     INITIAL_TARGET,
     MAX_BLOCK_BYTES,
@@ -43,6 +48,7 @@ class State:
         self.nonces: dict[str, int] = {}
         self.stakes: dict[str, list[dict]] = {}
         self.locked: dict[str, list[dict]] = {}
+        self.evm_state = EVMState()
 
     def spendable(self, address: str) -> int:
         return self.balances.get(address, 0)
@@ -62,6 +68,7 @@ class State:
         other.nonces = dict(self.nonces)
         other.stakes = {k: [dict(e) for e in v] for k, v in self.stakes.items()}
         other.locked = {k: [dict(e) for e in v] for k, v in self.locked.items()}
+        other.evm_state = self.evm_state.copy()
         return other
 
 
@@ -70,6 +77,7 @@ class Blockchain:
         self.data_file = data_file
         self.blocks: list[Block] = []
         self.state = State()
+        self.receipts: dict[str, Receipt] = {}
         if data_file and os.path.exists(data_file):
             self._load(data_file)
         else:
@@ -114,10 +122,16 @@ class Blockchain:
             return False, "coinbase cannot be validated as regular transaction"
         if not sig_ok and not tx.verify_signature():
             return False, "invalid signature"
-        if not is_valid_address(tx.recipient):
-            return False, "invalid recipient address"
-        if tx.amount <= 0:
-            return False, "amount must be positive"
+        if tx.is_evm:
+            if tx.evm_to and not is_valid_evm_address(tx.evm_to):
+                return False, "invalid evm recipient address"
+            if tx.evm_gas_limit > BLOCK_GAS_LIMIT:
+                return False, "evm gas limit exceeds block gas limit"
+        else:
+            if not is_valid_address(tx.recipient):
+                return False, "invalid recipient address"
+            if tx.amount <= 0:
+                return False, "amount must be positive"
         if tx.fee < MIN_FEE:
             return False, "fee below minimum"
         if tx.stake_amount != 0:
@@ -232,10 +246,16 @@ class Blockchain:
             if block.height == 0:
                 continue
             self._release_matured(state, block.height)
+            block_ctx = {
+                "number": block.height,
+                "timestamp": block.timestamp,
+                "difficulty": block.target,
+            }
             for tx in block.transactions[1:]:
-                self._apply_non_coinbase_tx(state, tx)
+                self._apply_non_coinbase_tx(state, tx, block_ctx)
             if block.transactions and block.transactions[0].is_coinbase:
                 self._apply_coinbase(state, block.transactions[0], block.height)
+            state.evm_state.finalize_block()
         return state
 
     def execute_reorg(self, fork_height: int, new_blocks: list[Block]) -> tuple[bool, str]:
@@ -255,7 +275,7 @@ class Blockchain:
         temp.state = working_state
 
         for block in new_blocks:
-            ok, reason = temp.validate_block(block)
+            ok, reason = temp.add_block(block)
             if not ok:
                 return False, reason
 
@@ -323,11 +343,21 @@ class Blockchain:
             return False, "invalid coinbase nonce"
         working = self.state.copy()
         self._release_matured(working, block.height)
+        block_ctx = {
+            "number": block.height,
+            "timestamp": block.timestamp,
+            "difficulty": block.target,
+        }
+        total_gas = 0
         for tx in block.transactions[1:]:
             ok, reason = self.validate_transaction(tx, working, sig_ok=sigs_ok)
             if not ok:
                 return False, reason
-            self._apply_non_coinbase_tx(working, tx)
+            if tx.is_evm:
+                total_gas += tx.evm_gas_limit
+                if total_gas > BLOCK_GAS_LIMIT:
+                    return False, "block gas limit exceeded"
+            self._apply_non_coinbase_tx(working, tx, block_ctx)
         return True, ""
 
     def _release_matured(self, state: State, height: int) -> None:
@@ -357,11 +387,69 @@ class Blockchain:
     def _release_matured_stakes(self, state: State, height: int) -> None:
         self._release_matured(state, height)
 
-    def _apply_non_coinbase_tx(self, state: State, tx: Transaction) -> None:
+    def _apply_non_coinbase_tx(
+        self, state: State, tx: Transaction, block_ctx: dict | None = None
+    ) -> Receipt | None:
         sender = tx.sender
         state.balances[sender] = state.balances.get(sender, 0) - tx.amount - tx.fee
-        state.balances[tx.recipient] = state.balances.get(tx.recipient, 0) + tx.amount
+        if tx.recipient and is_valid_address(tx.recipient):
+            state.balances[tx.recipient] = state.balances.get(tx.recipient, 0) + tx.amount
         state.nonces[sender] = state.nonces.get(sender, 0) + 1
+
+        if not tx.is_evm:
+            return None
+
+        # Execute EVM transaction
+        sender_evm = tx.sender_evm
+        target_evm = tx.evm_to.lower() if tx.evm_to else ""
+
+        b_num = block_ctx.get("number", 0) if block_ctx else 0
+        b_ts = block_ctx.get("timestamp", int(time.time())) if block_ctx else int(time.time())
+        b_diff = block_ctx.get("difficulty", 0) if block_ctx else 0
+
+        gas_limit = tx.evm_gas_limit if tx.evm_gas_limit > 0 else 30_000_000
+
+        ctx = ExecutionContext(
+            caller=sender_evm,
+            address=target_evm,
+            origin=sender_evm,
+            value=tx.evm_value,
+            data=tx.evm_data,
+            gas_price=0,
+            gas_limit=gas_limit,
+            block_number=b_num,
+            block_timestamp=b_ts,
+            block_difficulty=b_diff,
+            block_gas_limit=BLOCK_GAS_LIMIT,
+            chain_id=EVM_CHAIN_ID,
+        )
+
+        vm = EVM(state.evm_state)
+        created_addr = None
+        if not target_evm:
+            # Contract deployment (CREATE)
+            nonce = state.evm_state.get_nonce(sender_evm)
+            created_addr = derive_create_address(sender_evm, nonce)
+            state.evm_state.increment_nonce(sender_evm)
+            ctx.address = created_addr
+            res = vm.execute(tx.evm_data, ctx, is_create=True)
+            if res.success:
+                state.evm_state.set_code(created_addr, res.return_data)
+        else:
+            code = state.evm_state.get_code(target_evm)
+            res = vm.execute(code, ctx)
+
+        receipt = Receipt(
+            tx_hash=tx.txid,
+            status=1 if res.success else 0,
+            gas_used=res.gas_used,
+            cumulative_gas_used=res.gas_used,
+            contract_address=created_addr,
+            logs=res.logs,
+            return_data=res.return_data.hex(),
+        )
+        self.receipts[tx.txid] = receipt
+        return receipt
 
     def _apply_coinbase(self, state: State, tx: Transaction, height: int) -> None:
         miner = tx.recipient
@@ -376,12 +464,18 @@ class Blockchain:
 
     def _apply_block_state(self, block: Block) -> None:
         self._release_matured(self.state, block.height)
+        block_ctx = {
+            "number": block.height,
+            "timestamp": block.timestamp,
+            "difficulty": block.target,
+        }
         for tx in block.transactions:
             if tx.is_coinbase:
                 continue
-            self._apply_non_coinbase_tx(self.state, tx)
+            self._apply_non_coinbase_tx(self.state, tx, block_ctx)
         if block.transactions and block.transactions[0].is_coinbase:
             self._apply_coinbase(self.state, block.transactions[0], block.height)
+        self.state.evm_state.finalize_block()
 
     def add_block(self, block: Block, sigs_ok: bool = False) -> tuple[bool, str]:
         ok, reason = self.validate_block(block, sigs_ok=sigs_ok)

@@ -34,7 +34,7 @@ message = b"pacvo test message"
 signature = sign_message(secret_key, message)
 assert verify_signature(public_key, message, signature)
 assert not verify_signature(public_key, b"tampered", signature)
-assert not verify_signature(public_key, message, signature[:-1] + b"\x00")
+assert not verify_signature(public_key, message, bytes([signature[0] ^ 0xFF]) + signature[1:])
 
 kem_pk, kem_sk = generate_kem_keypair()
 ciphertext, shared_secret_enc = kem_encapsulate(kem_pk)

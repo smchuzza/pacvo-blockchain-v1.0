@@ -23,6 +23,11 @@ MAX_MSG_RATE = 50
 MTP_WINDOW = 11
 MAX_FUTURE_TIMESTAMP = 600
 
+# EVM Parameters
+BLOCK_GAS_LIMIT = 30_000_000
+EVM_CHAIN_ID = 9333
+MAX_CONTRACT_CODE_SIZE = 24576
+
 
 def stake_split(total_reward: int) -> tuple[int, int]:
     stake = total_reward // 10

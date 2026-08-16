@@ -133,10 +133,43 @@ async def test_per_ip_connection_limit() -> None:
             await _stop_node(node)
 
 
+async def test_eth_rpc_queries() -> None:
+    with tempfile.TemporaryDirectory() as d:
+        node = await _start_node(19445, d)
+        try:
+            # eth_chainId
+            r_cid = await rpc_call("127.0.0.1", 19445, "eth_chainId", {})
+            assert r_cid["data"]["chain_id"] == hex(9333)
+
+            # eth_blockNumber
+            r_bn = await rpc_call("127.0.0.1", 19445, "eth_blockNumber", {})
+            assert r_bn["data"]["number"] == 0
+
+            # eth_getBalance
+            r_bal = await rpc_call("127.0.0.1", 19445, "eth_getBalance", {"address": "0x1111111111111111111111111111111111111111"})
+            assert r_bal["data"]["balance_dec"] == 0
+
+            # eth_getCode
+            r_code = await rpc_call("127.0.0.1", 19445, "eth_getCode", {"address": "0x1111111111111111111111111111111111111111"})
+            assert r_code["data"]["code"] == "0x"
+
+            # eth_getStorageAt
+            r_st = await rpc_call("127.0.0.1", 19445, "eth_getStorageAt", {"address": "0x1111111111111111111111111111111111111111", "position": 0})
+            assert int(r_st["data"]["storage"], 16) == 0
+
+            # eth_call (read-only execution)
+            r_call = await rpc_call("127.0.0.1", 19445, "eth_call", {"to": "0x1111111111111111111111111111111111111111", "data": "0x"})
+            assert r_call["data"]["success"] is True
+            assert r_call["data"]["return_data"] == "0x"
+        finally:
+            await _stop_node(node)
+
+
 async def main() -> None:
     await test_honest_handshake_and_balance()
     await test_tampered_listener_signature_aborts()
     await test_per_ip_connection_limit()
+    await test_eth_rpc_queries()
     print("test_network: all tests passed")
 
 

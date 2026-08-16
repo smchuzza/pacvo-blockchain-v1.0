@@ -11,3 +11,10 @@ data-b/
 wa.json
 wb.json
 *.log
+config.txt
+.env
+*.env
+data_node*/
+wallet.json
+*.db
+*.sqlite
