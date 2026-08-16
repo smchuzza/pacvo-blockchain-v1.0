@@ -1,198 +1,220 @@
-# Pacvo (PVO)
+# Pacvo (PVO) — Post-Quantum Multi-Layer Blockchain & PVO-Fi Engine
 
-Pacvo is an post-quantum cryptocurrency full node written in Python. It implements a proof-of-work blockchain with account-based transfers, automatic staking of mining rewards, and an authenticated encrypted peer-to-peer network. The design goal is to demonstrate how modern post-quantum primitives can be composed into a working ledger—not to serve as production financial infrastructure.
+Pacvo is a post-quantum cryptocurrency full node and financial ecosystem written in Python. It implements a quantum-resistant Proof-of-Work blockchain, an embedded EVM bytecode execution environment (Layer 2), an automated financial economy (Layer 3 PVO-Fi), trustless cross-chain Hash Time-Locked Contracts (HTLC), and a modern Web Console interface.
 
-## Cryptography stack
+---
+
+## Architecture Overview
+
+```
+ ┌────────────────────────────────────────────────────────────────────────┐
+ │                      Interactive Web Console & CLI                     │
+ │          (Progressive Disclosure UI, JSON-RPC Gateway, Miner)          │
+ └────────────────────────────────────┬───────────────────────────────────┘
+                                      │
+ ┌────────────────────────────────────▼───────────────────────────────────┐
+ │               Layer 3: PVO-Fi Decentralized Economy                    │
+ │    • Constant-Product AMM DEX Pools (x * y = k)                        │
+ │    • Collateralized Debt Positions (CDP) & Lending (150% MCR)          │
+ │    • Native Proof-of-Reserve Bridges (wPVO-BTC, wPVO-XNO, wCCPVO)      │
+ │    • HTLC Cross-Chain Atomic Swaps & CCpow Proof Solver                │
+ └────────────────────────────────────┬───────────────────────────────────┘
+                                      │
+ ┌────────────────────────────────────▼───────────────────────────────────┐
+ │                 Layer 2: EVM & State Anchoring Engine                  │
+ │    • Full EVM Bytecode Interpreter (ERC-20 Fungible & ERC-721 NFTs)    │
+ │    • Deterministic CREATE2 Address Derivation                          │
+ │    • Periodic State Commitment Merkle Anchors                          │
+ └────────────────────────────────────┬───────────────────────────────────┘
+                                      │
+ ┌────────────────────────────────────▼───────────────────────────────────┐
+ │              Layer 1: Quantum-Resistant Base Ledger                    │
+ │    • SPHINCS+-SHA2-256s Stateful Signatures (~30 KB)                   │
+ │    • ML-KEM-768 Ephemeral Key Encapsulation (P2P Handshake)            │
+ │    • SHA-512 Hashcash Proof-of-Work Consensus                          │
+ │    • 128-Block Immature Coinbase Lockup & Auto-Staking Engine          │
+ └────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Cryptography Stack
 
 | Layer | Algorithm | Role |
-|-------|-----------|------|
-| Signatures | SPHINCS+-SHA2-256s (`pqcrypto.sign.sphincs_sha2_256s_simple`) | Transaction authorization (~30 KB signatures) |
-| P2P identity | SPHINCS+-SHA2-256s | Per-node long-lived handshake authentication |
-| P2P key exchange | ML-KEM-768 (`pqcrypto.kem.ml_kem_768`) | Ephemeral per-connection KEM |
-| P2P transport | AES-256-GCM | Directional session keys bound to handshake transcript |
-| Wallet encryption | bcrypt KDF + AES-256-GCM | Passphrase-protected secret keys |
-| Hashing / PoW | SHA-512 | Block IDs, Merkle tree, hashcash mining |
+|---|---|---|
+| **Signatures** | SPHINCS+-SHA2-256s (`pqcrypto.sign.sphincs_sha2_256s_simple`) | Post-quantum transaction authorization |
+| **P2P Identity** | SPHINCS+-SHA2-256s | Long-lived node identity & handshake signing |
+| **P2P Key Exchange** | ML-KEM-768 (`pqcrypto.kem.ml_kem_768`) | Ephemeral session key encapsulation |
+| **P2P Transport** | AES-256-GCM | Encrypted directional tunnel with transcript binding |
+| **Wallet Security** | bcrypt KDF (100 rounds) + AES-256-GCM | Encrypted passphrase-protected keystore |
+| **Consensus / PoW** | SHA-512 | Block hashes, Merkle root, difficulty validation |
+| **L2 / EVM Keccak** | Keccak-256 / SHA3 | EVM state trie, contract storage slots, CREATE2 |
 
-Addresses use the `pvo1` prefix followed by the full 64-byte `SHA-512(sign_public_key)` digest as hex (128 hex characters).
+Addresses use the `pvo1` prefix followed by the full 64-byte `SHA-512(sign_public_key)` digest in lowercase hex (128 hex characters). EVM compatibility addresses use standard `0x` 20-byte derived hex strings.
 
-## Consensus parameters
+---
 
-| Parameter | Value |
-|-----------|-------|
-| Block reward | 3 PVO |
-| Coin unit | 1 PVO = 10^8 base units |
-| Minimum fee | 0.0001 PVO (10,000 base units) |
-| Staking | 10% of each block reward auto-staked |
-| Stake lock | 128 blocks (~1.8 days at target block time) |
-| Coinbase maturity | 128 blocks (spendable reward locked until deep) |
-| Target block time | 20 minutes (1200 seconds) |
-| Difficulty retarget | Every 32 blocks, clamped to 4x adjustment |
-| Initial difficulty | `2^486` at launch (~20 min blocks on a typical CPU) |
-| Max reorg depth | 128 blocks |
-| Timestamps | Strictly greater than median-time-past (11 blocks); at most 600 s ahead of local clock |
+## Consensus & Economic Parameters
 
-Each mined block pays the miner 2.7 PVO as immature coinbase (locked until `unlock_height = block_height + 128`) and locks 0.3 PVO as stake until `unlock_height = block_height + 128`. Both mature into spendable balance when their unlock height is reached. Because `COINBASE_MATURITY` equals `MAX_REORG_DEPTH` (128), a miner must wait 128 confirmations before spending a block reward.
+| Parameter | Value | Description |
+|---|---|---|
+| **Block Reward** | 3.0 PVO | 2.7 PVO coinbase reward + 0.3 PVO auto-staked |
+| **Coin Unit** | 1 PVO = 10^8 Base Units | 8-decimal precision base ledger |
+| **Minimum Fee** | 0.0001 PVO (10,000 base units) | Anti-spam fee floor |
+| **Coinbase Maturity** | 128 Blocks (~1.8 days) | Immature mining rewards locked until deep confirmation |
+| **Staking Lockup** | 128 Blocks | 10% auto-staked reward locked alongside maturity |
+| **Max Reorg Depth** | 128 Blocks | Hard consensus boundary preventing deep reorg attacks |
+| **Target Block Time** | 20 Minutes (1,200s) | Target inter-block creation interval |
+| **Difficulty Retarget** | Every 32 Blocks | Clamped to a maximum 4x adjustment factor |
+| **HTLC Atomic Swap** | 1 PVO = 10 CC | Deterministic swap peg with Chocohub |
 
-## Resource limits
+---
 
-| Limit | Value |
-|-------|-------|
-| Max transactions per block | 100 |
-| Max block size (canonical JSON) | 4 MiB |
-| Max mempool transactions | 1,000 (evict lowest fee when full) |
-| Max P2P frame size | 8 MiB |
-| Max peers | 32 total connections |
-| Max headers per response | 4,000 |
-| Max inbound per IP | 3 |
-| Handshake timeout | 20 seconds |
-| Inbound message rate | 50 messages/second per connection |
-| Header sync batch | up to 64 blocks per `get_blocks` request |
+## Project Layout
 
-## Installation
+```
+pacvo-blockchain-v1.0/
+├── cli.py                  # Multi-subcommand CLI (run, wallet, evm, l2, l3, bridge, htlc, web, ccpow-miner)
+├── MPG_Miner.py            # Chocohub CCpow standalone miner (CPU/GPU OpenCL support)
+├── pacvo/
+│   ├── params.py           # Core consensus parameters and resource limits
+│   ├── crypto.py           # SPHINCS+, ML-KEM, AES-GCM, and addressing
+│   ├── wallet.py           # bcrypt + AES-256-GCM encrypted keystore
+│   ├── transaction.py      # Signed transactions and coinbase validation
+│   ├── block.py            # Block structure, Merkle tree, and PoW hashing
+│   ├── chain.py            # 128-block maturity tracker, headers-first reorg engine
+│   ├── network.py          # Authenticated P2P protocol, TOFU pinning, JSON-RPC
+│   ├── node.py             # Full node daemon, mempool simulation cache, sync loop
+│   ├── miner.py            # SHA-512 block candidate builder & mining thread
+│   ├── evm/                # Layer 2 EVM Execution Engine
+│   │   ├── vm.py           # Bytecode interpreter, gas accounting, stack/memory
+│   │   ├── opcodes.py      # Full opcode table, arithmetic, control flow, LOG, CREATE2
+│   │   ├── precompiles.py  # EIP-198 ModExp, SHA256, Keccak256 precompiles
+│   │   ├── state.py        # Journaled contract storage and rollback state trie
+│   │   └── receipt.py      # Execution receipts and event logs
+│   ├── l2/                 # Layer 2 Token & Asset Factory
+│   │   ├── token.py        # ERC-20 token standard implementation
+│   │   ├── nft.py          # ERC-721 NFT minting & transfer engine
+│   │   ├── factory.py      # Deterministic contract deployment & management
+│   │   └── anchor.py       # Layer 1 block root state commitments
+│   └── l3/                 # Layer 3 PVO-Fi Financial Economy
+│       ├── amm.py          # Constant-Product Automated Market Maker (DEX)
+│       ├── lending.py      # Collateralized Debt Positions (150% MCR) & Liquidation
+│       ├── bridge.py       # Multi-asset reserve bridges (BTC, Nano, Chocohub)
+│       ├── htlc.py         # Trustless HTLC atomic swaps & CCpow solver
+│       ├── reserve.py      # Proof-of-Reserve attestations (Genesis 4 POL Polygon)
+│       ├── equity.py       # Tokenized equity shares & dividend claims
+│       └── treasury.py     # Protocol fee management & reserve vaults
+├── web/                    # Interactive Web Console Interface
+│   ├── index.html          # Progressive disclosure dashboard & management console
+│   ├── style.css           # Modern aesthetic design tokens & dark theme
+│   ├── app.js              # Application state, RPC client, and financial modules
+│   └── crypto_util.js      # Client-side Keccak256, CREATE2, and CCpow math
+├── contracts/              # Solidity Smart Contracts
+│   └── PacvoNFT.sol        # Genesis NFT ERC-721 collection contract
+└── tests/                  # Complete Comprehensive Test Suite
+    ├── test_crypto.py      # Post-quantum cryptographic primitive verification
+    ├── test_chain.py       # 128-block maturity & consensus reorg tests
+    ├── test_network.py     # P2P handshake, TOFU pinning, and sync tests
+    ├── test_evm.py         # EVM opcode, stack, storage, and precompile tests
+    ├── test_differential_evm.py # EVM fuzzing & determinism validation
+    ├── test_l2.py          # ERC-20 & ERC-721 token factory tests
+    ├── test_l3_economy.py  # AMM, lending, and proof-of-reserve tests
+    ├── test_bridge.py      # Bitcoin, Nano, and Chocohub bridge adapter tests
+    └── test_htlc.py        # Chocohub HTLC atomic swap & CCpow tests
+```
+
+---
+
+## Installation & Setup
+
+### 1. Prerequisites
+- Python 3.11+
+- Virtual environment (`venv`)
+- Standard build tools
 
 ```bash
-git clone <repository-url>
-cd pacvo-blockchain
+# Clone the repository
+git clone https://github.com/smchuzza/pacvo-blockchain-v1.0.git
+cd pacvo-blockchain-v1.0
+
+# Create and activate virtual environment
 python3 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate  # On Windows: .venv\Scripts\Activate.ps1
+
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-## Running tests
+---
+
+## Quick Start & Usage
+
+### 1. Create a Post-Quantum Wallet
+```bash
+.venv/bin/python cli.py wallet create --out wallet.json
+# Enter passphrase when prompted
+```
+
+### 2. Start the Pacvo Full Node & Miner
+```bash
+export PACVO_WALLET_PASSPHRASE='your-passphrase'
+.venv/bin/python cli.py run \
+  --wallet wallet.json \
+  --data data_node1 \
+  --host 127.0.0.1 \
+  --port 9442 \
+  --mine
+```
+
+### 3. Launch the Web Console Interface
+```bash
+.venv/bin/python cli.py web --host 127.0.0.1 --port 8080
+```
+Open **[http://localhost:8080](http://localhost:8080)** in your browser to access the Web Console.
+
+### 4. Run Chocohub CCpow Miner
+```bash
+# Run CCpow miner using environment variable for authentication
+export CHOCO_PIN="your-account-pin"
+.venv/bin/python cli.py ccpow-miner --worker pacvo15_476_wccpvo --threads 2
+```
+
+---
+
+## Running the Automated Test Suite
+
+Execute the full suite of unit and integration tests:
 
 ```bash
+# Core Cryptography & Consensus Tests
 .venv/bin/python tests/test_crypto.py
 .venv/bin/python tests/test_chain.py
 .venv/bin/python tests/test_network.py
+
+# Layer 2 EVM & Token Factory Tests
+.venv/bin/python tests/test_evm.py
+.venv/bin/python tests/test_differential_evm.py
+.venv/bin/python tests/test_l2.py
+.venv/bin/python tests/test_nft.py
+
+# Layer 3 PVO-Fi Economy, Bridges & Atomic Swap Tests
+.venv/bin/python tests/test_l3_economy.py
+.venv/bin/python tests/test_bridge.py
+.venv/bin/python tests/test_htlc.py
 ```
 
-SPHINCS+-256s signing is slow (on the order of seconds per signature); network tests use only a handful of handshakes. All SPHINCS+ signing and verification on the asyncio event loop is offloaded to a thread-pool executor so peers cannot block the node during handshakes or transaction/block signature checks.
+---
 
-## Two-node demo
+## Security & Design Principles
 
-This walkthrough starts a mining node and a syncing peer on localhost, mines blocks, checks balances, and sends a transfer.
+- **Quantum Resistance**: SPHINCS+-SHA2-256s and ML-KEM-768 protect all signing and peer-to-peer transport against quantum cryptanalysis.
+- **128-Block Reorg & Lockup Invariant**: Spendable coinbase rewards and auto-stakes remain strictly immature for 128 blocks (`COINBASE_MATURITY = MAX_REORG_DEPTH = 128`), preventing reward reversal vulnerabilities during chain reorganizations.
+- **Strict Credential Isolation**: Account PINs, private keys, and passphrases remain isolated server-side/environment-side (`.gitignore` protected) and are never transmitted over frontend APIs.
+- **Non-Blocking Threadpool Offloading**: CPU-intensive SPHINCS+ signing and verification tasks are dispatched to worker thread pools, preserving event loop responsiveness.
 
-### 1. Create wallets and data directories
+---
 
-```bash
-mkdir -p /tmp/pacvo-demo/data-a /tmp/pacvo-demo/data-b
+## License & Disclaimer
 
-.venv/bin/python cli.py wallet create --out /tmp/pacvo-demo/wa.json
-# Enter and confirm a passphrase when prompted
-
-.venv/bin/python cli.py wallet show --wallet /tmp/pacvo-demo/wa.json
-# Enter passphrase
-
-.venv/bin/python cli.py wallet create --out /tmp/pacvo-demo/wb.json
-.venv/bin/python cli.py wallet show --wallet /tmp/pacvo-demo/wb.json
-```
-
-Save the printed addresses as `ADDR_A` and `ADDR_B`.
-
-Non-interactive passphrase (less secure; useful for scripts):
-
-```bash
-export PACVO_WALLET_PASSPHRASE='your-passphrase'
-```
-
-### 2. Start node A (miner) and node B (peer)
-
-Each node stores a plaintext `identity.json` in its data directory. This key authenticates the node on the P2P network; it does not hold funds.
-
-In separate terminals:
-
-```bash
-# Terminal 1 — miner (first block takes ~20 minutes at launch difficulty)
-.venv/bin/python cli.py run \
-  --wallet /tmp/pacvo-demo/wa.json \
-  --data /tmp/pacvo-demo/data-a \
-  --host 127.0.0.1 --port 9333 --mine
-```
-
-```bash
-# Terminal 2 — syncing peer
-.venv/bin/python cli.py run \
-  --wallet /tmp/pacvo-demo/wb.json \
-  --data /tmp/pacvo-demo/data-b \
-  --host 127.0.0.1 --port 9334 \
-  --peers 127.0.0.1:9333
-```
-
-Wait for the miner to find the first block (on the order of 20 minutes), then for subsequent blocks to propagate via headers-first sync.
-
-### 3. Confirm sync on node B
-
-```bash
-.venv/bin/python cli.py chain --node 127.0.0.1:9334 --last 5
-```
-
-### 4. Check miner balance on node A
-
-```bash
-.venv/bin/python cli.py balance --address ADDR_A --node 127.0.0.1:9333
-```
-
-Spendable balance excludes immature coinbase and staked amounts. Immature coinbase and locked entries are listed separately with their unlock heights.
-
-### 5. Send PVO from wallet A to wallet B
-
-```bash
-.venv/bin/python cli.py send \
-  --wallet /tmp/pacvo-demo/wa.json \
-  --to ADDR_B \
-  --amount 2.5 --fee 0.01 \
-  --node 127.0.0.1:9334
-```
-
-You will be prompted for the wallet passphrase (or `PACVO_WALLET_PASSPHRASE`).
-
-### 6. Confirm recipient balance on node B
-
-```bash
-.venv/bin/python cli.py balance --address ADDR_B --node 127.0.0.1:9334
-```
-
-Stop both node processes with Ctrl+C when finished.
-
-## Project layout
-
-```
-pacvo/
-  params.py       # Chain constants and resource limits
-  crypto.py       # PQ primitives, AES-GCM, addressing
-  wallet.py       # bcrypt-encrypted key persistence
-  transaction.py  # Signed transfers and coinbase
-  block.py        # Block header, Merkle root, PoW check
-  chain.py        # State, validation, headers-first reorg
-  network.py      # Authenticated ML-KEM P2P and rpc_call()
-  node.py         # Mempool, sync, identity, TOFU pinning
-  miner.py        # Candidate builder and mining loop
-cli.py            # Command-line interface
-tests/            # Unit tests (no live mining)
-```
-
-## Security (v2)
-
-**Authenticated P2P handshake.** Outbound connections use a challenge–response protocol: the dialer sends a random 32-byte challenge; the listener responds with a fresh ML-KEM public key, its SPHINCS+ identity public key, and a signature over `pacvo-hs-listener || kem_pub || challenge`. The dialer verifies, encapsulates, and responds with ciphertext, its identity key, and a signature over `pacvo-hs-dialer || ct || kem_pub || challenge`. Shared secrets derive directional AES-256-GCM keys from the KEM output and a transcript hash over all handshake material.
-
-**TOFU pinning.** Outbound peers are recorded in `known_peers.json` as `host:port → sha512(identity_pub)[:16]`. A changed identity on reconnect aborts with an error log. Inbound connections and one-shot `rpc_call` clients use ephemeral identities (no pinning).
-
-**Encrypted wallets.** Wallet secret keys are encrypted with AES-256-GCM after key derivation via `bcrypt.kdf` (100 rounds, 16-byte salt from `os.urandom`, which is seeded from hardware timing jitter and other kernel entropy sources on Linux). Wrong passphrases raise a clear error.
-
-**Headers-first sync.** Peers exchange header chains via `get_headers` / `headers`, validate proof-of-work and retarget rules without bodies, then fetch block bodies in batches via `get_blocks` / `blocks`. Reorgs deeper than 128 blocks are rejected. Block responses during sync are tied to the requesting peer; unsolicited `blocks` messages are ignored. Header responses are capped at 4,000 entries.
-
-**Non-blocking PQ crypto.** SPHINCS+ signing and verification (handshakes, incoming transactions, block signature pre-checks) run in a thread-pool executor via `run_in_executor`, keeping the asyncio event loop responsive.
-
-**Coinbase maturity.** Mining rewards are locked for 128 blocks (`COINBASE_MATURITY`) before becoming spendable, matching `MAX_REORG_DEPTH`. This mitigates—but does not eliminate—reward reversal after a deep reorg.
-
-**Atomic persistence.** Chain state (`chain.json`), node identity (`identity.json`), and peer pins (`known_peers.json`) are written to a temporary file in the same directory and atomically replaced with `os.replace()`.
-
-**Address validation.** Recipient addresses must be `pvo1` followed by 128 lowercase hex characters. Invalid addresses are rejected in transaction validation and in the `send` CLI command.
-
-**Mempool simulation cache.** The node maintains an incrementally updated simulated state for mempool admission instead of rebuilding from scratch on every transaction.
-
-**Median-time-past.** Block timestamps must be strictly greater than the median of the previous 11 block timestamps and no more than 600 seconds in the future.
-
-## Security disclaimer
-
-On a small network with low aggregate hashrate, the chain is vulnerable to 51% attacks and deep reorganizations up to `MAX_REORG_DEPTH` (128 blocks). Coinbase maturity (128 blocks) delays spendability of mining rewards and mitigates—but does not eliminate—the risk that a reorg could reverse recently mined rewards. Do not treat Pacvo as secure financial infrastructure.
+Pacvo is released for research and educational purposes. On networks with small aggregate hashrate, Proof-of-Work blockchains are subject to reorganizations up to `MAX_REORG_DEPTH`. Always exercise operational security when managing cryptographic keys.
