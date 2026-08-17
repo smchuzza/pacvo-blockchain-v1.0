@@ -35,7 +35,8 @@ Pacvo is a post-quantum cryptocurrency full node and financial ecosystem written
  │    • 128-Block Immature Coinbase Lockup & Auto-Staking Engine          │
  └────────────────────────────────────────────────────────────────────────┘
 ```
-
+---
+## Discord: https://discord.gg/cQXuwbRUN 
 ---
 
 ## Cryptography Stack
